@@ -1,0 +1,81 @@
+#!/bin/bash
+# generates $XMLFILE for dvdauthor from vob/ts files in a set of input directories
+
+VERSION=20060424
+
+
+### TODO #################
+# possible menus.sh flags
+# if --play-all-titles is not defined, each title will return to main menu after playing
+# with -g : if source is .ts , add call for ts2vob
+#	  : column support
+# length counter: midentify $INPUT | grep LENGTH | awk -F= {'print $2'})
+# pit‰isi voida ajaa -f foo --count ja saada vain countsize funktion output
+# siirr‰ totalsize-funktiossa FILE ja BSIZE-m‰‰ritykset viimeiseen luuppiin if SHOWME .. ketjun j‰lkeen
+# filelistit pit‰isi sis‰lt‰‰ vain absoluuttisen tiedostopolun, nuthin' more
+# kun menua rakennetaan, se tehd‰‰n while ! -e menu_xxx.png|jpg|etc ...
+#	v‰hitellen. 1) menu.mpeg 2) menu_background 3) menu_text jne...
+#	ja a) olemassaoleva kansiossa valmiina
+#	   b) kirjastoissa valmiit taustat
+#	   c) generoitu valkoinen / random tausta
+#	mahdollisuus k‰ytt‰j‰n vaikuttaa menun teksteihin ja v‰reihin.
+
+ 
+### SOURCE FUNCTIONS and PATHS ##########
+source "$(type -p dvdxmlauthor.functions)"
+source "$(type -p bash.functions)"
+source /etc/dvb2vob.conf
+source /usr/bin/gettext.sh
+
+
+### DEFINE VARIABLES  ###########
+
+PROJECT_NAME="DVD-$(date +%Y%m%d)"
+FILELIST="${PROJECTDIR}/DVD-$(date +%Y%m%d).filelist.tmp"
+PRINTOUT="$(pwd)/contents-$(date +%Y%m%d)"
+#TMPFILE="/video/scripts/files.tmp"
+TMPFILE="$(pwd)/files.tmp"
+FULL_SUFFICES="$SUFFICES"
+SHOW="\w" # for grep to show all files
+CHAPTERS="0,5:00,10:00,15:00,20:00,25:00,30:00,35:00,40:00,45:00,50:00,55:00,60:00,65:00,70:00,75:00,80:00,85:00,90:00,95:00,100:00";
+FILE_COUNTER=1
+TEXTDOMAIN=dvdxmlauthor
+LOGFILE="${LOGDIR}/dvdxmlauthor.log"
+TTY_WIDTH="$(stty size | awk '{print $2}')"
+blankimage="/home/mikael/bin/dvbauthor/lib/blank.png"
+
+refresh_defs
+
+
+# media capacities in MB
+DVD5=4400
+DVD9=8900
+test=5
+
+MEDIA=$DVD5
+
+
+
+PRINT_dvdxmlauth_Info
+
+
+### PARSING THE ARGUMENTS ###########
+ParseArgs "$@"
+
+if [ ! "$FILELIST" ]; then 
+	eval_gettext $"No files defined!" ; echo
+	exit 0;
+fi
+
+#show_filelist $FILELIST
+
+#chk_vob
+#populate $FILELIST
+#eval_gettext $"DVD will be made to"; echo " ${DESTINATION}"
+
+
+### MAKE THE XML && THE DVD #############
+
+#rm_existing_target
+#mk_xml && mk_dvd
+
