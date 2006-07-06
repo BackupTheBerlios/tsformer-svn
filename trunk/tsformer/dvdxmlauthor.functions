@@ -1,0 +1,1565 @@
+#!/bin/bash
+# functions for dvdxmlauthor 
+# by Mikael Lammentausta
+# this is LGPL
+
+TEXTDOMAIN=dvdxmlauthor
+
+# TODO:
+# use mktemp -t
+# use IFS
+# use set -x for debugging
+
+# 15:52 < AnMaster> set +x unsets set -x
+#15:52 < AnMaster> set -x makes bash echo every command before it runs it
+#15:47 < AnMaster> The Internal Field Separator that is used for word splitting after expansion and to split lines into
+#                  words with the read builtin command. The default value is ``<space><tab><newline>''.
+
+#goldfish> a=Page/; echo "${a:0:4}"; echo "${a%/}"
+#19:41 < goldfish>  echo ${a//\/}
+#19:41 < goldfish> also works.
+#19:42 < goldfish> They all use Paramater Expansion
+
+
+
+function prepare_user {
+
+	flush
+	generate_filelist
+	sort_filelists
+	DVD_HELP="off"
+	SHOW_TAGGED="yes"
+	SHOW_ONLY_FIT="no"
+	show_user
+}
+
+
+function refresh_defs {
+	DESTINATION="${DVD_DIR}/DVD"
+	XMLFILE="${DVD_DIR}/dvdauthor.xml"
+}
+
+function show_user {
+
+	# if the filelist exits from a previous run (it is intentionally not deleted)
+	[[ -e $FILELIST ]] && totalsize - $FILELIST $MEDIA
+	show_files "${TMPFILE}.du.full.sorted" "$SHOW" "${FILELIST}"
+
+#	if [ "$SHOW" != "\w" ]; then
+#		cat "${TMPFILE}.full.sorted" | grep -i "$SHOW" > $filelist_partial
+#		countSize print $filelist_partial
+#	else
+#		countSize print "${TMPFILE}.full.sorted" 
+#	fi
+
+	listen_user
+
+}
+
+
+
+function listen_user {
+
+	listen_input
+#	show_filelist
+	#chk_vob
+	#ask_dvd_params
+
+}
+
+
+function flush {
+	if [ -e "$TMPFILE.base" ]; then rm -f $TMPFILE.base; fi
+	if [ -e "$TMPFILE.du" ]; then rm -f $TMPFILE.du; fi
+	if [ -e "$TMPFILE.full" ]; then rm -f $TMPFILE.full; fi
+		# TMPFILE.base contains just the basenames
+		# TMPFILE.full contains the absolute path information
+		# TMPFILE.du contains files (relative paths) with their filesize
+	rm -f $TMPFILE.*
+}
+
+
+
+
+
+function generate_filelist {
+	# this function generates a filelist for dvdxmlauthor
+
+	FILE_COUNTER=1
+
+	#  first we ls all the files into TMPFILE and with absolute paths into TMPFILE-2
+	for SUFFIX in ${SUFFICES}; do
+		for DIR in ${VOBDIRS}; do
+			if [ -e $DIR ]; then
+				cd $DIR
+				# this is a way to check if *.$SUFFIX files exist in target directory
+				if [ "$(ls *.$SUFFIX >/dev/null 2>&1 && echo proceed)" ]; then
+
+					/bin/ls -1d ${DIR}/*.${SUFFIX} | \
+						grep '^/' | grep -v ':$' >> $TMPFILE.full
+
+					du -sh *.$SUFFIX >> $TMPFILE.du
+					du -b ${DIR}/*.$SUFFIX >> $TMPFILE.du.full
+
+				fi
+			else
+				eval_gettext $"\$DIR doesn't exist!"
+			fi
+			cd - &> /dev/null
+		done
+	done
+
+	#  this calculates the total number of files in this directory,
+	# or exits because no files found
+	[[ -e $TMPFILE.full ]] &&
+		TOTAL_FILES=$(cat $TMPFILE.full | wc -l) || exit 0;
+		# && 	echo "$TOTAL_FILES in $VOBDIRS" || exit 0;
+
+}
+
+
+function sort_filelists {
+
+	# what this horrible pipe does is to use awk to move the last
+	# column $NF first, sort, then reorder. it depends on the
+	# correct $LC_LANG locate, so it's not the best solution.
+	# this is because the odd characters put by sed.
+
+	cat $TMPFILE.full | tr ' ' '§' | sed 's/\//¡¿\//g' | \
+		awk -F¡ '{printf $NF ; $NF="" ; printf $0"\n" }' | \
+		sort | awk -F¿ '{ FF=$2 ; $2="" ; printf $0FF"\n" }' | \
+		tr '  ' -d | tr '§' ' ' > $TMPFILE.full.sorted
+
+	cat $TMPFILE.du.full | tr ' ' '§' | sed  's/\//¡¿\//g' | \
+		awk -F¡ '{printf $NF " ¿"; $NF="" ; printf $0"\n" }' | \
+		sort | \
+		awk -F¿ '{ FF=$2 ; $2="" ; printf $0FF"\n" }' | \
+		tr '  ' -d | tr '§' ' ' > $TMPFILE.du.full.sorted
+
+	cat $TMPFILE.du | sort -k 2 > $TMPFILE.du.sorted
+
+}
+
+
+function show_files() {
+	# this function expects two inputs; $1 for $FILES and $2 for grep regexp.
+	# the function displays the contents of FILES to the user.
+	FILES="$1"
+	GREP="$2"
+	TAGLIST="$3" # is added to filelist, use different color for output
+
+	shown_files=$(mktemp -t dvbauth.XXXXXX)
+	total_size=0
+	subtotal_size=0
+	echo 
+	for FILE_NR in `seq 1 $(cat $FILES | wc -l)`; do
+
+		SHOWME="yes"
+		FILECOLOR="${tcGREEN}"
+
+		FILE="$(
+                        sed -n "${FILE_NR}{p;q;}" $FILES | \
+                        awk -F/ '{print $NF}'
+                     )"
+
+
+		# if file is on the filelist..
+		#for fil in $(cat $FILELIST  | awk -F/ {'print $NF'}); do
+			#if [ "$(echo $FILE)" == "$(echo $TAGGED)" ]; then
+			#FILECOLOR="${tcYELLOW}${tBOLD}" # this file is on the FILELIST
+		
+
+			BSIZE="$(
+						sed -n "${FILE_NR}{p;q;}" $FILES | \
+						awk  {'print $1'}
+					   )"
+			total_size=$(($total_size+$BSIZE))
+			if [ "$BSIZE" -lt 1024 ]; then
+				SIZE="$BSIZE B"
+			elif [ "$BSIZE" -lt 1048576 ]; then
+				SIZE="$(($BSIZE/1024)) kB"
+			elif [ "$BSIZE" -lt 1073741824 ]; then
+				SIZE="$(($BSIZE/1024/1024)) MB"
+			else
+				SIZE="$(($BSIZE/1024/1024/1024)) GB"
+			fi
+
+
+			# if the file is TAGGED (already selected), display it in yellow colour
+			if [ -e "$TAGLIST" ]; then
+				for TAGGED in $(cat $TAGLIST  | awk -F/ {'print $NF'}); do
+						if [ "$(echo $FILE)" == "$(echo $TAGGED)" ]; then
+						FILECOLOR="${tcYELLOW}${tBOLD}" # this file is on the FILELIST
+						
+						if [ "$SHOW_TAGGED" == "no" ]; then
+							SHOWME="no"
+						else
+							SHOWME="yes"
+						fi
+
+					break;
+					fi
+				done
+			fi
+
+			# if the filesize is larger than what fits on the media, display it in red colour
+			if [ "$AVAILABLE" ]; then
+				if [ "$(($BSIZE/1024/1024))" -ge "$AVAILABLE" ]; then
+					FILECOLOR="${tcRED}" # this file doesn't fit on the FILELIST
+					if [ "$SHOW_ONLY_FIT" == "yes" ]; then
+							SHOWME="no"
+					else
+						SHOWME="yes"
+					fi
+				fi
+			fi
+
+			# if SHOW_TAGGED="no", do not display tagged files,
+			# and if SHOW_ONLY_FIT="no" then do not display too large files
+
+			# this is NOT true IF and ONLY IF the file is tagged and tagged files are not shown
+			# if ! ( [ "$(echo $FILE)" == "$(echo $TAGGED)" ] && [ "$SHOW_TAGGED" == "no" ] ); then
+
+			if [ "$SHOWME" == "yes" ]; then
+				echo -e "  [$FILE_NR]\t" \
+					${tcCYAN} \
+					${tBOLD} \
+					$SIZE \
+					${tSTD} "\t"\
+					$FILECOLOR\
+					$FILE \
+					${tSTD} | grep -i $GREP | tr '_' ':' # the tr is because of a Kaffeine timers bug
+
+				# collect a list for totalsize to get the correct size of shown files
+				#sed -n "${FILE_NR}{p;q;}" ${FILES} | awk -F/ {'print $NF'} >> $shown_files
+				sed -n "${FILE_NR}{p;q;}" ${FILES} >> $shown_files
+				subtotal_size=$(($subtotal_size+$BSIZE))
+
+					#cat $shown_files
+			fi
+		done 
+	#set -x
+		if [ "$subtotal_size" -lt 1024 ]; then
+			TOTSIZE="$subtotal_size B"
+		elif [ "$subtotal_size" -lt 1048576 ]; then
+			TOTSIZE="$(($subtotal_size/1024)) kB"
+		elif [ "$subtotal_size" -lt 1073741824 ]; then
+			TOTSIZE="$(($subtotal_size/1024/1024)) MB"
+		else
+			TOTSIZE="$(($subtotal_size/1024/1024/1024)) GB"
+		fi
+
+		echo -ne "\t"${tcCYAN}$TOTSIZE" "
+		eval_gettext $"in total" ; echo ${tSTD}
+		#totalsize print ${shown_files}
+	#set +x
+		#countSize print 
+}
+
+
+function totalsize() {
+	myFILELIST=${2}
+	DVD_size=$3
+	unset PRINT
+	[[ "$1" == "print" ]] && PRINT=$1 
+	TOTALSIZE=0
+	TITLES=$(cat ${myFILELIST} | wc -l)
+
+	if [ $TITLES -ge 1 ]; then
+		if [ "$(cat $myFILELIST | head -n 1 | grep -Eo '^[0-9]+')" ]; then
+		# the filelist already contains sizes
+			for TITLE_NR in `seq 1 $TITLES`; do
+				# du -b gives the size in bytes
+				SIZE=$(sed -n "${TITLE_NR}{p;q;}" ${myFILELIST} | awk  {'print $1'})
+				TOTALSIZE=$(($TOTALSIZE+$SIZE))
+			done;
+
+		else
+	
+			for TITLE_NR in `seq 1 $TITLES`; do
+				# du -b gives the size in bytes
+				SIZE=$(du -b "$(sed -n "${TITLE_NR}{p;q;}" ${myFILELIST})" | awk {'print $1'})
+				TOTALSIZE=$(($TOTALSIZE+$SIZE))
+			done;
+		fi
+	fi
+	
+	TOTALSIZE=$(($TOTALSIZE/1024/1024))
+	[[ "$DVD_size" ]] && AVAILABLE="$(($DVD_size-$TOTALSIZE))"
+
+
+	if [ "$PRINT" ]; then
+		echo -ne "\t"${tcCYAN} ;
+		echo -en "$TOTALSIZE " ; 
+		eval_gettext $"MB " ; echo -n ${tSTD}; eval_gettext $"total" 
+
+		if [ "$AVAILABLE" ] && [ "$AVAILABLE" -gt 0 ]; then 
+			echo -ne "\n\t"${tcGREEN} ; 
+			echo -n $AVAILABLE" MB "; 
+			echo -n ${tSTD}
+			eval_gettext $"available" 
+
+		elif [ "$AVAILABLE" ] && [ "$AVAILABLE" -le 0 ]; then
+			echo -ne "\t" ${tcRED}
+			eval_gettext $"TOTAL SIZE EXCEEDS MEDIA CAPACITY!"
+			echo ${tSTD}
+		fi
+	fi	
+
+
+}
+
+function countSize() {
+	# will be redundant
+	# there's a major design flaw here
+	# as the temporary filelist will contains size intact
+	
+	
+	### CALCULATES THE SIZE OF FILELIST ###############
+	# $2 = FILELIST
+	# $3 = DVD5|DVD9|etc  < if set, eval as DVD
+	# 	it sets the AVAILABLE variable that tells in MB how much more can fit on the media
+	# $1 = print or not
+
+	myFILELIST=${2}
+	cat $myFILELIST
+	DVD_size=$3
+	unset PRINT
+	[[ "$1" == "print" ]] && PRINT=$1 
+
+	TOTALSIZE=0
+	TITLES=$(cat ${myFILELIST} | wc -l)
+
+	if [ "$TITLES" -ge 1 ]; then
+		for TITLE_NR in `seq 1 $TITLES`; do
+			# du -b gives the size in bytes
+			#SIZE=$(du -b "$(sed -n "${TITLE_NR}{p;q;}" ${myFILELIST} | awk  {'print $2'})")
+			SIZE=$(du -b "$(sed -n "${TITLE_NR}{p;q;}" ${myFILELIST})")
+			TOTALSIZE=$(($TOTALSIZE+$SIZE))
+		done;
+	fi
+
+	TOTALSIZE=$(($TOTALSIZE/1024/1024))
+	[[ "$DVD_size" ]] && AVAILABLE="$(($DVD_size-$TOTALSIZE))"
+
+
+	if [ "$PRINT" ]; then
+		echo -ne "\t"${tcCYAN} ;
+		echo -en "$TOTALSIZE " ; 
+		eval_gettext $"MB " ; echo -n ${tSTD}; eval_gettext $"total" 
+
+		if [ "$AVAILABLE" ] && [ "$AVAILABLE" -gt 0 ]; then 
+			echo -ne "\n\t"${tcGREEN} ; 
+			echo -n $AVAILABLE" MB "; 
+			echo -n ${tSTD}
+			eval_gettext $"available" 
+
+		elif [ "$AVAILABLE" ] && [ "$AVAILABLE" -le 0 ]; then
+			echo -ne "\t" ${tcRED}
+			eval_gettext $"TOTAL SIZE EXCEEDS MEDIA CAPACITY!"
+			echo ${tSTD}
+		fi
+	fi	
+
+}
+
+
+
+function listen_input {
+	echo ; 
+	if [ "$HELP" == "on" ]; then
+
+	##### SHOWING USER THE OPTIONS #################
+	echo
+	eval_gettext $"Enter the numbers associated to files in the order in which you wish them on the DVD"; echo
+	eval_gettext $"Enter a string to match a set of files";echo
+
+	if [ "$SUFFICES" != "$FULL_SUFFICES" ] || [ "$SHOW" != "\w" ]; then
+		eval_gettext $"Enter '"
+#		echo -n ${tcGREEN}ls a${tSTD}" "
+#		eval_gettext $"or" 
+		echo -n " "${tcGREEN}ls *${tSTD}
+		eval_gettext $"' to show all files" ; echo
+	elif [ "$SUFFICES" == "$FULL_SUFFICES" ]; then
+		eval_gettext $"Enter"
+		echo -n " '"${tcGREEN}.vob${tSTD}"' "
+		eval_gettext $"to show only .vob files" ; echo
+	fi
+
+	# MAKE A PRINT
+	eval_gettext $"Enter '" 
+		echo -n ${tcGREEN}p${tSTD} 
+		eval_gettext $"' to generate a print" ; echo 
+
+	# LOAD FILELIST
+#	eval_gettext $"Enter '"
+#	echo -n ${tcGREEN}load${tSTD}
+#	eval_gettext $"' to load an existing filelist" ; echo
+
+	# LIST FILES
+	echo "Enter '=' to see the files you have collected"
+
+	# SEE INFO
+#	echo "Enter 'i <number>' to see the description for each program'"
+
+	fi
+
+	[[ -e $FILELIST ]] && [[ "$DVD_HELP" == "on" ]] &&
+	if [ "$(cat $FILELIST | wc -l)" -gt 0 ]; then
+
+		# REMOVE FILES
+		eval_gettext $"Enter '"
+		echo -n ${tcGREEN}-${tSTD}
+		eval_gettext $" <number>' to remove files (-* to remove all)"; echo
+
+		# SAVE FILELIST
+		eval_gettext $"Enter '"
+		echo -n ${tcGREEN}s${tSTD}
+		eval_gettext $"' to save the filelist"; echo
+
+		# PROCEED TO MAKE DVD
+		eval_gettext $"Enter '"
+		echo -n ${tcGREEN}ok${tSTD}
+		eval_gettext $"' if you want to proceed" ; echo
+
+		DVD_HELP="off"
+
+	fi
+
+	if [ "$HELP" == "on" ] || [ "$DVD_HELP" == "on" ]; then
+	# EXIT:
+	eval_gettext $"Enter '"
+	echo -n ${tcGREEN}x${tSTD}
+	eval_gettext $"' to exit" ; echo
+
+
+	# from the DVD mode:
+
+#	eval_gettext $"Enter '"
+#	echo -n ${tcGREEN}+${tSTD}
+#	eval_gettext $" <number>' to return to add mode"; echo
+
+	HELP="off"
+	fi
+
+
+	#### PARSE THE USER INPUT ###############
+
+	SEL_NR=0 ; 	echo -en "\t> "; read USER
+	while [ "$USER" != "ok" ]; do
+
+		case "${USER}" in
+
+			'ls'|ls[[:space:]]*)
+				ARGUMENT="$(echo "$USER" | awk {'print $2'})"
+				case "$ARGUMENT" in
+
+					\*|'all'|'a')
+						SUFFICES="$FULL_SUFFICES"
+						SHOW="\w" #this is a regexp
+						flush
+						prepare_user
+					;;					
+
+					'new')
+						SHOW_TAGGED="no"
+						show_user						
+					;;
+					
+					'vob'|'.vob')
+						SUFFICES="vob"
+						#SUFFICES="odt"
+						flush
+						prepare_user
+						# needs to flush because showonly.vob isn't based on grepping, it generates
+						# a whole new filelist!!
+					;;
+
+					'fit')
+						SHOW_ONLY_FIT="yes"
+						show_user						
+					;;
+
+					'')
+						show_user
+						listen_user
+					;;
+				esac
+			;;
+
+
+			'=')
+				if [ ! -e "$FILELIST" ]; then 
+					eval_gettext $"Filelist is empty." ; echo
+				else
+					show_filelist 
+				fi
+				listen_user
+			;;
+
+			'list'|list[[:space:]]*)
+		                ARGUMENT="$(echo "$USER" | awk {'print $2'})"
+				list_filelist $ARGUMENT
+				listen_user
+			;;
+
+			'load'|load[[:space:]]*)
+		                ARGUMENT="$(echo "$USER" | awk {'print $2'})"
+				if [ ! "$ARGUMENT" ]; then
+					eval_gettext $"Define a project to load."; echo
+					listen_user
+				else
+					load_filelist $ARGUMENT
+					listen_user
+				fi
+			;;
+
+			'save'|save[[:space:]]*)
+				ARGUMENT="$(echo "$USER" | awk {'print $2'})"
+				if [ "$ARGUMENT" ]; then
+					save_filelist $ARGUMENT
+				else
+					save_filelist $PROJECT_NAME
+				fi
+				listen_user
+			;;
+
+			'help'|'?')
+				HELP="on"
+				DVD_HELP="on"
+				listen_user
+			;;
+
+			'exit'|'x')
+				flush
+				exit 0;
+			;;
+
+		esac
+
+
+	# REMOVE ENTRY FROM FILELIST 
+		# utilises sed and grep. sed writes the matching line 
+		# to file 'rm' and grep displays inverted match.
+		if [ "$(echo $USER | grep -E '^\-')" ]; then
+			RM="$(echo $USER | sed 's/-//')"
+
+			if [ "$RM" == "*" ]; then # remove all
+				rm $FILELIST -f 
+				AVAILABLE=$MEDIA
+
+			else
+				sed -n "${RM}{p;q;}" $FILELIST > rm
+				grep -v -f rm $FILELIST > $FILELIST~
+				mv $FILELIST~ $FILELIST -f ; rm rm -f
+				totalsize - $FILELIST $MEDIA
+			fi
+
+			if [ -e "$FILELIST" ] && [ "$(cat $FILELIST | wc -l)" -gt 0 ]; then
+				echo ; totalsize print $FILELIST $MEDIA ;
+				show_filelist 
+				listen_user
+			else	# user removed all files from filelist, restart
+				SUFFICES="$FULL_SUFFICES"
+		                AVAILABLE=$MEDIA
+				SHOW="\w" #this is a regexp
+				DVD_HELP="on"
+				flush
+				prepare_user
+			fi
+
+
+		#elif [ $( echo $USER | grep -Eo '^[^\-]+[[:digit:]]' )]; then
+        elif [ ! $( echo $USER | grep -Eo '[A-Öa-ö]{3,}|[\=\?]+' ) ]; then # it's probably an input
+#			((SEL_NR++)) # add the selected file to USER_FILES array
+#			USER_FILES[$SEL_NR]="$(sed -n "${USER}{p;q;}" ${TMPFILE}.full.sorted)"
+			sed -n "${USER}{p;q;}" ${TMPFILE}.full.sorted >> $FILELIST
+			totalsize - $FILELIST $MEDIA
+			echo -en "\t> "; read USER
+
+		elif [ $( echo $USER | grep -E '\w') ]; then # match files
+			SHOW="$USER"
+			show_user 
+
+
+		else
+			eval_gettext $"GRR. Input properly!"
+			echo -en "\t> "; read USER
+
+		fi
+
+
+#		if [ "$(echo $USER | grep -E '^\+')" ]; then
+#			ADD="$(echo $USER | sed 's/+//')"
+#			sed -n "${ADD}{p;q;}" ${TMPFILE}.full.sorted >> $FILELIST
+#			echo ; countSize print $FILELIST ;	
+#			echo -en "\t> "; read USER
+#			listen_user;
+
+
+	done
+
+}
+
+
+
+function show_filelist {
+
+	FILES="$(cat $FILELIST | wc -l )"
+	if [ "$FILES" -eq 0 ]; then
+		exit 1;
+	fi
+
+	echo
+	eval_gettext $"You have added these files to the DVD:"
+	echo
+
+	for TITLE_NR in `seq 1 $(cat $FILELIST | wc -l )`; do
+		echo -e "  [$TITLE_NR]\t" \
+		${tBOLD}${tcCYAN} \
+		"$(
+			du -h "$(sed -n "${TITLE_NR}{p;q;}" ${FILELIST})" | awk {'print $1'}
+		   )" \
+		${tSTD} \
+		${tcGREEN} \
+		"$(
+			du -h "$(sed -n "${TITLE_NR}{p;q;}" ${FILELIST})" | \
+			awk -F/ '{$1="" ; print $NF}'
+		   )" \
+		${tSTD} 
+
+	done;
+
+	totalsize print $FILELIST $MEDIA;
+
+}
+
+
+
+
+function list_filelist() {
+
+	# if user gave an argument, then list the files inside that directory
+	[[ "$1" ]] && userFILEDIR="${PROJECTDIR}/${1}"
+	if [ -e "${userFILEDIR}" ]; then
+		echo -ne "\n\t"${tREVERSE}
+		eval_gettext $"Files in "; echo ${userFILEDIR}${tSTD}
+		echo -e "\t"$(ls "${userFILEDIR}")
+		unset userFILEDIR
+
+	# else, if the projectdir isn't empty
+	elif [ ! "$1" ] && [ "$(/bin/ls -1d ${PROJECTDIR}/*/)" ]; then 
+
+		# this puts the filelists into an array
+		for myLIST in `seq 1 $(/bin/ls -1d ${PROJECTDIR}/*/ | wc -l)`; do
+			myFILELISTS[$myLIST]="$(/bin/ls -1d ${PROJECTDIR}/*/*filelist)"
+		done
+
+		echo -ne "\n\t"${tREVERSE}
+		eval_gettext $"Projects in "; echo ${PROJECTDIR}${tSTD}
+		
+		for TITLE_NR in `seq 1 $myLIST`; do
+			#if [ $(/bin/ls "${myFILELISTS[$TITLE_NR]}") ]; then
+			echo -ne "\t"$(totalsize print ${myFILELISTS[$TITLE_NR]})"\t"
+			echo ${myFILELISTS[$TITLE_NR]} | awk -F\/ {'print $(NF-1)'}
+			#fi
+		done
+
+	else
+		eval_gettext $"No files found!"
+	fi
+
+}
+
+
+function load_filelist() {
+
+	userFILELIST="${PROJECTDIR}/${1}"
+
+	# load the latest filelist in directory, cat into tmpfile $FILELIST
+	if [ -e "${userFILELIST}" ]; then
+		
+	    cat "$(/bin/ls "${userFILELIST}/"*filelist | tail -n 1)" > $FILELIST
+	    PROJECT_NAME="$(echo "${userFILELIST}" | awk -F\/ {'print $NF'})"
+	    echo "Loaded ${PROJECT_NAME}"
+		DVD_DIR="${PROJECTDIR}/${PROJECT_NAME}"
+		refresh_defs
+
+	else
+		eval_gettext $"Filelist does not exist." ; echo
+	fi
+
+}
+
+
+function deduce_menu_status() {
+
+	eval_gettext $"Deducing menu files in " ; echo ${DVD_DIR}
+
+	BG=$(ls ${DVD_DIR} -1 | grep -i 'background')
+	if [ "$BG" ]; then #aha! user has been doing something
+
+		BG_SUF=$(echo $BG | awk -F. {'print $NF'} | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/' )
+		if [ "$BG_SUF" == "jpg" ]; then
+
+			MENU_BG="${BG}"
+
+#		elif 
+
+		fi
+	fi
+}
+
+
+
+function chk_vob {
+	# this function calls ts2vob in case user has chosen files
+	# that are not vob (hoping they are .ts or .m2t)
+
+	UNFIT=0
+	for TITLE_NR in `seq 1 $(echo $FILELIST | wc -l)`; do
+
+		if [ "$(
+			sed -n "${TITLE_NR}{p;q;}" ${FILELIST} | awk -F. {'print $NF'}
+		)" != "vob" ]; then
+
+			((UNFIT++))
+			NONVOB[$UNFIT]="$(sed -n "${TITLE_NR}{p;q;}" ${FILELIST})"
+		fi
+
+	done;
+
+	if [ "$UNFIT" -ne 0 ]; then
+
+		echo ${tcRED}
+		eval_gettext $"These files are not in DVD format." 
+		echo ${tSTD}
+
+		for TITLE_NR in `seq 1 $UNFIT`; do
+			echo -e "${NONVOB[$TITLE_NR]}"
+		done
+
+		echo -ne "\n\t" ; 
+		eval_gettext $"Convert? (Y/n) > "
+		read USER;
+		
+		if [ "$USER" == "y" ] || [ "$USER" == "" ]; then
+
+			for TITLE_NR in `seq 1 $UNFIT`; do
+				ts2vob -i "${NONVOB[$TITLE_NR]}"
+			done
+
+		elif [ "$USER" == "n" ]; then
+			flush
+			exit 0;
+
+		else
+			echo -en "\t> "; read USER
+		fi
+
+	fi
+}
+
+function save_filelist() {
+
+	PROJECT_NAME="$1"
+
+	# ask the user for a name for the project, if not given as argument
+	if [ ! "$PROJECT_NAME" ]; then
+		echo ; echo -n "Enter a name for the project > "
+        	read PROJECT_NAME
+	fi
+	
+	if [ -e "${PROJECTDIR}/${PROJECT_NAME}" ]; then
+		echo ${tcGREEN}
+		eval_gettext $"A directory with that name already exists"
+		echo ${tSTD}
+	else
+		mkdir -p "${PROJECTDIR}/${PROJECT_NAME}"
+	fi
+
+	DVD_DIR="${PROJECTDIR}/${PROJECT_NAME}"
+
+	cat $FILELIST > ${DVD_DIR}/${PROJECT_NAME}"-$(date +%Y%m%d).filelist"
+
+	eval_gettext $"Filelist saved to "
+	echo ${DVD_DIR}/${PROJECT_NAME}"-$(date +%Y%m%d).filelist"
+
+}
+
+function ask_dvd_params {
+
+        ask_menu
+
+        echo ; eval_gettext $"Shall we proceed to build the DVD? (y/n)"
+        echo -en "\t> "; read USER
+        if [ "$USER" != "y" ]; then
+            flush
+            exit 0;
+        else
+            populate "${FILELIST}"
+            rm_existing_target
+            mk_xml && mk_dvd
+        fi
+}
+
+
+
+function ask_menu {
+
+	deduce_menu_status
+
+#	if [ -e "${DVD_DIR}/menu_background.jpg" ]; then
+#		eval_gettext $"Menu files detected: " ; echo -ne "\t" ${tcYELLOW}
+#		echo ${tSTD}
+#		eval_gettext $"Enter 'ok' if you want to use these files" ; echo
+
+#	else
+		echo
+		eval_gettext $"Would you like to have menus on the DVD?" ; echo
+		eval_gettext $"Enter 'q' if you want to author them now with qdvdauthor" ; echo 
+		eval_gettext $"Enter 'ls' to list available menu backgrounds in " ; echo "$LIBDIR"
+#	fi
+
+	eval_gettext $"Enter 'no' if you don't want menus" ; echo
+	echo -en "\t> "; read USER
+
+	if [ "$USER" == "no" ]; then MENUS="no" ;	
+	
+	elif [ "$USER" == "ok" ]; then
+		echo foo > /dev/null # fine
+
+	elif [ "$USER" == "q" ]; then
+		qdvdauthor &
+		echo TODO
+		exit 0;
+
+	elif [ "$USER" == "ls" ]; then
+		$(ls ${WORKDIR}/*.m2v);
+		echo TODO
+		exit 0;
+
+	else
+		eval_gettext $"GRR. Input properly!"
+		echo -en "\t> "; read USER
+	fi
+
+}
+
+function populate() {
+	### POPULATE THE VOB[] ARRAY WITH INPUT FILES ###############
+	# also the MENUITEM array
+
+	FILELIST="${1}"
+	echo $FILELIST
+	TITLES=$(cat "${FILELIST}" | wc -l) 
+
+	echo -ne "\n  [${tcGREEN}OK${tSTD}]\t"
+	eval_gettext $"Processing" ; echo -n " "$TITLES" " ;
+	eval_gettext $"input files in" ; echo " "$FILELIST 
+	
+	for TITLE_NR in `seq 1 $TITLES`; do
+		file="$(sed -n "${TITLE_NR}{p;q;}" "${FILELIST}")"
+		suffix=$(echo ${file} | awk -F. {'print $NF'} | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/' )
+
+		VOB_[$TITLE_NR]="${file}"
+		MENUITEM[$TITLE_NR]="$(basename "$file"  .$suffix)"
+
+	done;
+	
+}
+
+
+
+
+
+
+
+create_menu_background() {
+	MENUBGCOLOR="white"
+	MENUTITLECOLOR="gray"
+	X_RES=720
+	Y_RES=576
+		# for default font of 13 letters FONTSIZE=96 fills up the screen nicely
+		# let the maximum fontsize be 100
+		# => 100/(y*13) = 96 
+		# y is the 'magic number' = 0.080 1/character
+		# => dynamic_font_size=100/(y*string_length)
+	TITLE_FS=$((8000/(5*${#PROJECT_NAME})))
+	(($TITLE_FS/100))
+	EDGE_SPACE=70
+
+	# process TITLE
+	convert -transparent white -fill $MENUTITLECOLOR -pointsize $TITLE_FS -gravity "center" -draw "text 0,200 '$PROJECT_NAME'" $blankimage "${DVD_DIR}/${MENU_BGFILE}"
+
+	# done
+	MENU_BG="${DVD_DIR}/${MENU_BGFILE}"
+
+}
+
+
+create_menu_text() {
+	MAX_STRING_LENGTH=0
+	# get the longest string in array
+	for item in `seq 1 ${#MENUITEM[@]}`; do
+		if [ ${#MENUITEM[$item]} -gt $MAX_STRING_LENGTH ]; then
+			MAX_STRING_LENGTH=${#MENUITEM[$item]}
+		fi
+	done
+
+	#echo $MAX_STRING_LENGTH
+	MENUTEXTCOLOR="black"
+	MENUHIGHLIGHTCOLOR="green"
+	X_RES=720
+	Y_RES=576
+		# for default font of 13 letters FONTSIZE=96 fills up the screen nicely
+		# let the maximum fontsize be 100
+		# => 100/(y*13) = 96 
+		# y is the 'magic number' = 0.080 1/character
+		# => dynamic_font_size=100/(y*string_length)
+	FONTSIZE=$((8000/(7*$MAX_STRING_LENGTH))) #bash can't handle floats
+	(($FONTSIZE/100))
+	Y_COORD=-220 	# this is the starting point for fontsize=120, 0=vertical center
+	Y_SPACE=25
+	EDGE_SPACE=70
+
+	# then, if the number of items in the list is high, the vertical limit may be reached.
+	# this routine checks that and reduces FONTSIZE accordingly.
+	Y_SIZE=$((${#MENUITEM[@]}*($FONTSIZE+$Y_SPACE)))
+	#echo $Y_SIZE
+	if [ $Y_SIZE -gt $(($Y_RES-$EDGE_SPACE)) ]; then
+		Y_OVER=$(($Y_SIZE-$Y_RES+$EDGE_SPACE))
+		FONTSIZE_OVER_FOR_EACH_ITEM=$((($Y_OVER+$Y_SPACE)/${#MENUITEM[@]}))	
+		FONTSIZE=$(($FONTSIZE-$FONTSIZE_OVER_FOR_EACH_ITEM))
+	fi
+
+	#echo $FONTSIZE 
+
+		# process the eval command for convert and do the three required files
+	myCOLOR=$MENUTEXTCOLOR	
+	for file in "menu_text.png" "menu_highlight.png"; do
+		
+		convert_cmd="convert -colors 4 -transparent white -fill $myCOLOR -pointsize $FONTSIZE -gravity \"center\" "
+		for item in `seq 1 ${#MENUITEM[@]}`; do
+			convert_cmd=$convert_cmd"-draw \"text 0,$Y_COORD '${MENUITEM[$item]}'\" "
+			Y_COORD=$(($Y_COORD+$FONTSIZE+$Y_SPACE))
+		done
+	
+		convert_cmd=$convert_cmd" $blankimage $file"
+		#eval $convert_cmd
+		myCOLOR=$MENUHIGHLIGHTCOLOR
+		Y_COORD=-220
+	done
+	
+
+	#feh menu_text.jpg -FZ
+
+	#exit 0;
+	# where are the fonts located???
+
+	# convert -resize $myASPECT! 
+	# convert xc:$MENUTBGCOLOR -resize $myASPECT! -gravity "Center" -draw "text 0,0 '${MENUITEM[1]}'" textimage.jpg
+	# convert -font helvetica -fill blue -pointsize 30 -draw "text 100,100 Cockatoo" textimage.jpg bird.jpg
+
+	#TEXT_HEIGHT
+	#TEXT_WIDTH
+}
+
+
+
+function mk_menu_xml {
+	cat <<EOF>> "${XMLFILE}"
+    <menus>
+      <video format="$FORMAT" aspect="$ASPECT" widescreen="$WIDESCREEN" />
+      <pgc entry="root">
+EOF
+
+	### MENU BUTTONS ######
+	for TITLE_NR in `seq 1 $TITLES`; do
+		echo "        <button> jump title $TITLE_NR; </button>" >> "${XMLFILE}"
+	done;
+
+	### TITLE DEFINITIONS IN MENU #############
+	cat <<EOF>> "${XMLFILE}"
+        <vob file="${MENU_MPEG}"/>
+        <post> jump cell 1; </post>
+      </pgc>
+    </menus>
+EOF
+
+}
+
+
+
+
+function mk_xml {
+
+	### XMLFILE HEADER ######
+	cat <<EOF> "${XMLFILE}"
+<dvdauthor dest="${DESTINATION}">
+
+  <vmgm />
+
+  <titleset>
+EOF
+	##### END OF HEADER #######
+
+	#### ADD MENUS TO DVD #############
+	if [ "$MENUS" != "no" ]; then 
+		mk_menu_xml
+	fi #### END OF MENU CREATION ##############
+
+
+	#### BEGIN TITLE DEFINITION ###############
+
+	cat <<EOF>> "${XMLFILE}"
+    <titles>
+      <video widescreen="$WIDESCREEN"
+             aspect="$ASPECT"
+             format="$FORMAT" />
+      <audio lang="$AUDIO_LANG" />
+      <subpicture lang="$SUBTITLE_LANG" />
+EOF
+
+	# if [ ! "PLAYALL" ]; then
+		NEXT="menu";
+	# else 
+	#  NEXT="title $(($TITLE_NR+1))"
+	# fi
+
+	for TITLE_NR in `seq 1 $TITLES`; do
+
+		echo -e "\t<pgc>" >> "${XMLFILE}"
+		echo  "  <vob file=\""${VOB_[$TITLE_NR]}"\" chapters=\""$CHAPTERS"\"/>" >> "${XMLFILE}"
+		# echo -e "\t  <vob file=\"${VOB_"$TITLE_NR"}\" chapters=\"$CHAPTERS\"/>" >> "${XMLFILE}"
+		echo -e "\t    <post> call $NEXT; </post>" >> "${XMLFILE}"
+		echo -e "\t</pgc>" >> "${XMLFILE}"
+	done
+	### END OF TITLES ##########
+
+
+	### DVD CLOSING TAGS ############
+
+	cat <<EOF>> "${XMLFILE}"
+     </titles>
+
+  </titleset>
+
+</dvdauthor>
+EOF
+
+
+	### CONVERTING XMLFILE TO UTF-8 ###########
+
+	mv "${XMLFILE}" "${XMLFILE}"~
+	iconv "${XMLFILE}"~ -t UTF-8 > "${XMLFILE}"
+	rm "${XMLFILE}"~
+}
+
+
+function mk_dvd {
+### USER INTERACTION #######
+
+	echo; eval_gettext $"Do you wish to create the DVD now?" ; 
+	echo -en "\t> "; read USER
+	if [ "$USER" == "y" ]; then
+
+		dvdauthor -x "${XMLFILE}" #2> "${LOGFILE}"
+
+		eval_gettext $"Do you wish to test the DVD now?" ; 
+		echo -en "\t> "; read USER
+		if [ "$USER" == "y" ]; then
+   		xine dvd:"${DESTINATION}"
+		fi
+	fi
+}
+
+
+function rm_existing_target {
+	if [ -e "${DESTINATION}" ]; then
+		eval_gettext $"Output directory \${DESTINATION} is already occupied." ; echo
+		eval_gettext $"Enter 'rm' to remove contents and continue" ; echo 
+		eval_gettext $"Enter 'n' to rename project" ; echo
+		eval_gettext $"Enter 'x' to keep contents and quit" ; echo
+			echo -en "\t> "; read USER
+
+		if [ "$USER" == "rm" ]; then
+			rm "${DESTINATION}" -rf
+		elif [ "$USER" == "n" ]; then
+			ask_dvd_params
+		else
+			flush
+			exit 0;
+		fi
+	fi
+}
+
+
+
+warn() {
+        echo ""
+        echo -e "\e[33;01m $1\e[m\c"    # Amber
+        shift; echo " $*"
+        echo ""
+        return 0
+}
+good() {
+        echo ""
+        echo -e "\e[32;01m $1\e[m\c"    # Green
+        shift; echo " $*"
+        echo ""
+       return 0
+}
+errmsg () {
+        echo ""
+        echo -e "\e[31;01m $1\e[m\c"    # Red
+        shift; echo " $*"
+}
+
+function create_Menu {
+
+while [ ! "$MENU_MPEG" ]; do
+	MENU_FILENAME="menu.mpeg"
+	MENU_BGFILE="menu_background.png"
+
+	# DEDUCE IF MPEG IS ALREADY IN THE PROJECT DIRECTORY, else CREATE IT
+	if [ -e "${DVD_DIR}/${MENU_FILENAME}" ]; then
+		# TODO: ASK THE USER IF THIS IS OK
+		MENU_MPEG="${DVD_DIR}/${MENU_FILENAME}"
+		echo "USING $MENU_MPEG AS MENU FILE"
+	else
+
+		#TODO:
+		# IF NOT FILES BACKGROUND.PNG OR BACKGROUND.AC3 (SOUND) OFFERED, 
+		# USE ONES RIPPED FROM THE MPEG. THE FRAME AND THE MPEG FILE MAY 
+		# BE SPECIFIED ON THE COMMAND LINE. USE CONVERT[]
+
+		# ASPECT RATIOS
+		#        1 - 1:1 DISPLAY
+		#        2 - 4:3 DISPLAY
+		#        3 - 16:9 DISPLAY
+		#        4 - 2.21:1 DISPLAY
+
+		if [ "$ASPECT" == "4:3" ]; then
+			myASPECT=2;
+		elif [ "$ASPECT" == "16:9" ]; then
+			myASPECT=3;
+		else
+			myASPECT=3;
+		fi
+
+		# ORDER OF MENU ENTRIES
+		# COLUMNS: (DEFAULT)
+		# SEL1  SEL2  SEL3
+
+		# ROWS:
+		# SEL1
+		# SEL2
+		# SEL3
+
+
+		cd "${DVD_DIR}" # THIS SHOULDN'T BE NEEDED
+		
+
+		if [ "${USER_MENU_BG}" == "" ]; then 
+		# BACKGROUND NOT DEFINED BY USER, then LOOK INTO PROJECT DIRECTORY
+
+			if [ -e "${DVD_DIR}/${MENU_BGFILE}" ]; then
+
+				MENU_BG="${DVD_DIR}/${MENU_BGFILE}"
+		
+			else
+				create_menu_background
+			fi
+		
+		MENU_SUFFIX="$(echo "${MENU_BG}" | awk -F. {'print $NF'})"
+		
+		fi 
+
+
+		### DEFINE THE PNG FILES FOR THE MENU #############
+		### NOTE: THEY HAVE TO BE IN 4 COLOURS ONLY
+
+		MENU_TEXT="${DVD_DIR}/menu_text.png"
+		if [ -e "$MENU_TEXT" ]; then
+
+			if [ -e "${DVD_DIR}/menu_select.png" ]; then
+				MENU_SELECT="${DVD_DIR}/menu_select.png";
+			else 
+				MENU_SELECT="${DVD_DIR}/menu_text.png";
+			fi
+			MENU_HIGHLIGHT="${DVD_DIR}/menu_highlight.png"
+		else		
+			create_menu_text
+			MENU_SELECT="${DVD_DIR}/menu_text.png";
+			MENU_HIGHLIGHT="${DVD_DIR}/menu_highlight.png"
+		fi
+
+
+		if [ ! "$ORDER" ]; then 
+		#echo ORDER NOT DEFINED; 
+			ORDER="rows"; 
+		fi
+
+		### CREATE MENU STRUCTURE ########
+		### MENU VIDEO, GENERATED FROM STILL PICTURE if NOT .M2V EXIST ######
+		if [ "$MENU_SUFFIX" != "m2t" ]; then 
+		# the background is a still image.
+			echo -ne "  [${tcGREEN}OK${tSTD}]\t"
+		    eval_gettext $"Creating menu background animation" ; echo
+			convert "${MENU_BG}" ppm:- 2>> "${LOGFILE}" | ppmtoy4m -n500 -F25:1 -A59:54 -I p -r -S 420mpeg2 2>> "${LOGFILE}" | \
+			mpeg2enc -n p -f8 -b5000 -a$myASPECT -o "${MENU_BG}.m2v" >& /dev/null
+			MENU_M2V="${MENU_BG}.m2v"
+		else
+			MENU_M2V="${MENU_BG}"
+		fi
+
+
+		### MENU AUDIO ###
+		# just silence
+		dd if=/dev/zero bs=4 count=5000 | toolame -b 128 -s 48 /dev/stdin "${MENU_BG}.mp2" 2> /dev/null
+
+		mplex -f 8 -o "${WORKDIR}/MENU_BACKGROUND.mpeg" "${MENU_M2V}" "${MENU_BG}.mp2" 2>> "${LOGFILE}"
+
+cat <<EOF> "${DVD_DIR}/menu.xml"
+<subpictures>
+  <stream>
+   <spu
+	   force="yes"
+	   start="00:00:00.00"
+	   image="$MENU_TEXT"
+	   select="$MENU_SELECT"
+	   highlight="$MENU_HIGHLIGHT"
+	   autooutline="infer"
+	   autoorder="$ORDER"
+	   outlinewidth="18">
+   </spu>
+  </stream>
+</subpictures>
+EOF
+
+			echo -ne "  [${tcGREEN}OK${tSTD}]\t"
+		    eval_gettext $"Creating menu" ; echo
+
+			spumux "${DVD_DIR}/menu.xml" < "${WORKDIR}/MENU_BACKGROUND.mpeg" > "${DVD_DIR}/${MENU_FILENAME}" # 2>> "${LOGFILE}" && \
+			MENU_MPEG="${DVD_DIR}/${MENU_FILENAME}"
+
+			#rm ${WORKDIR}/MENU_BACKGROUND.mpeg -f 
+			# rm ${MENU_BG}.m2v -f && rm silence.mp2 -f && \
+			cd - &> /dev/null
+	fi
+done
+	MENUS="YES"
+	set -x
+}
+
+function ParseArgs {
+if [ "${#}" -gt 0 ]; then # there are arguments to the command
+	while [ "${#}" -gt 0 ]; do
+    case "$1" in
+
+		'--help'|'-help'|'--usage'|'-usage'|'-h'|'')
+        PRINT_dvdxmlauth_Help
+        ;;
+
+		'-i'|'-f'|'--filelist')
+			if [ "$2" ]; then # deducing if the input file is relative or absolute
+				if [ "$(echo $2 | head -c1)" != "/" ]; then
+					FILELIST=$(pwd)/${2};
+				else
+			 		FILELIST="${2}" 
+				fi
+				DVD_DIR=$(dirname "${FILELIST}")
+				refresh_defs
+				#DESTINATION="${DVD_DIR}/DVD"
+	    		shift 2
+	  		else
+	    		echo "switch $1: missing input filelist"
+	    		exit 0;
+	  		fi
+		;;
+
+		'--project'|'--load')
+			load_filelist "${2}"
+			shift 2
+		;;
+
+		'--projectname'|'--name')
+			PROJECT_NAME="${2}"
+		;;
+
+		'-o'|'--output')
+			if [ "$2" ]; then
+			 # deducing if input is relative or absolute
+				if [ "$(echo $2 | head -c1)" != "/" ]; then # it's relative
+					if [ -e ${2} ]; then
+					PROJECTDIR="$(pwd)/${2}";
+						DESTINATION="$(pwd)/${2}/${PROJECT_NAME}";
+					else
+						 DESTINATION="$(pwd)/${2}";
+					fi
+				else
+					if [ -e "${2}" ]; then
+					PROJECTDIR="${2}";
+						DESTINATION="${PROJECTDIR}/${PROJECT_NAME}"
+					else
+						DESTINATION="${2}";
+					fi
+				fi
+			shift 2
+			else
+				echo "switch $1: missing destination"
+				exit 0;
+			fi
+		;;
+
+        '-F'|'--format')
+			if [ "$2" ]; then
+				FORMAT="$2"
+				shift 2
+			else
+				echo "switch $1: missing format"
+				exit 0;
+			fi
+        ;;
+        '-a'|'--aspect')
+			if [ "$2" ]; then
+				ASPECT="$2"
+				shift 2
+			else
+				echo "switch $1: missing aspect"
+				exit 0;
+			fi
+        ;;
+        '-aud')
+          if [ "$2" ]; then
+            AUDIO_LANG="$2"
+            shift 2
+          else
+            echo "switch $1: missing audio language"
+            exit 0;
+          fi
+        ;;
+        '-sub')
+          if [ "$2" ]; then
+            SUBTITLE_LANG="$2"
+            shift 2
+          else
+            echo "switch $1: missing subtitle language"
+            exit 0;
+          fi
+        ;;
+        '-O'|'--order')
+          if [ "$2" ]; then
+            ORDER="$2"
+            shift 2
+          else
+            echo "switch $1: missing autoorder flag for spumux"
+            exit 0;
+          fi
+        ;;
+        '-g'|'--user')
+		    HELP="on"
+    		prepare_user
+        ;;
+        'p'|'--print')
+            list_Files
+		;;
+
+        '--size')
+		if [ ! $FILELIST ]; then
+			echo "You haven't defined a filelist"
+			exit 0;
+		fi
+	    totalsize print $FILELIST $MEDIA
+            exit 0;
+        ;;
+
+		'--create_menu'|'--create-menu')
+			populate "${FILELIST}"
+			create_Menu
+		;;
+		'--menu')
+			if [ "$2" ]; then
+				if [ "$(echo $2 | head -c1)" != "/" ]; then
+			 		MENU_MPEG=$(pwd)/${2};
+				else
+			 		MENU_MPEG=${2}
+				fi
+				shift 2
+			else
+				echo "switch $1: missing menu mpeg"
+				exit 0;
+			fi
+		;;
+        '--menubg')
+          if [ "$2" ]; then
+            USER_MENU_BG="$2"
+            shift 2
+          else
+            echo "switch $1: missing menu background file"
+            exit 0;
+          fi
+        ;;
+		'--mkdvd')
+			process_args
+			populate "${FILELIST}"
+			rm_existing_target
+			mk_xml
+			mk_dvd
+			shift 1
+		;;
+	
+		'--playall')
+			PLAYALL=1
+			shift 1
+		;;
+     '--verbose'|'-v')
+       isverbose=1
+       shift 1
+       ;;
+     '-V'|'--version')
+	PRINT_dvdxmlauth_Info
+       exit 0;
+       ;;
+     *)
+	INPUT="$1"
+	warn ARGUMENT "-i wasn't set, using $1 as input file"
+       shift 1;
+       ;;
+		esac
+	done
+else
+        PRINT_dvdxmlauth_Help
+fi
+
+process_args
+
+}
+
+function process_args {
+	if [ ! "$FORMAT" ]; then # FORMAT is not set
+		FORMAT="pal"
+	fi
+	if [ ! "$ASPECT" ]; then 
+		ASPECT="16:9"
+	fi
+	if [ "$ASPECT" == "16:9" ]; then
+		WIDESCREEN="nopanscan"
+	else
+		WIDESCREEN="noletterbox"
+	fi
+	if [ ! "$AUDIO_LANG" ]; then 
+		AUDIO_LANG="en"
+	fi
+	if [ ! "$SUBTITLE_LANG" ]; then 
+		SUBTITLE_LANG="fi"
+	fi
+#	if [ "$MENU_BG" == "menu_background" ] || [ ! "$MENU_BG" ]; then 
+#		if [ -e "${DVD_DIR}/menu_background.jpg" ] && [ -e "${DVD_DIR}/menu_text.png" ]; then
+#			create_Menu
+#		else
+#			MENUS="no" # only tested if not run with user interaction
+#		fi
+#	fi
+#	if [ ! "${DESTINATION}" ]; then
+#		DESTINATION="$(pwd)/DVD"
+#		eval_gettext $"Output is not defined. Using " ; echo $DESTINATION
+#	fi
+}
+
+
+
+function CheckDeps {
+	DEPFAIL=0;
+
+	if [ ! "$(type -p dvdauthor)" ]; then
+		errmsg "DEPENDENCY IS MISSING": dvdauthor
+		DEPFAIL=1;
+	fi
+
+	if [ ! "$(type -p iconv)" ]; then
+		errmsg "DEPENDENCY IS MISSING": iconv
+	fi
+
+	if [ ! "$(type -p unix2dos)" ]; then
+		errmsg "DEPENDENCY IS MISSING": unix2dos
+	fi
+
+}
+
+
+
+function generate_printout {
+	# PRINTOUT is for printing :)
+	cat $TMPFILE.du.sorted > ${PRINTOUT}
+	for width in `seq 1 20`; do 
+		echo -n "#" >> ${PRINTOUT}
+	done
+	echo >> ${PRINTOUT}
+	totalsize print $TMPFILE.full | tail -n 1 >> ${PRINTOUT}
+	echo  "$TOTAL_FILES files in total" >> ${PRINTOUT}
+
+	flush
+	echo; echo;
+	cat $PRINTOUT 
+	echo ; echo  "Written to file ${PRINTOUT}"
+
+	# ask the user to change to DOS CRLF format
+	echo ; eval_gettext $"Do you want to convert to DOS format? (y/n) > "
+	read USER
+	if [ "$USER" == "y" ]; then
+		unix2dos ${PRINTOUT}
+		mv ${PRINTOUT} ${PRINTOUT}.txt
+		echo ; echo "Written to file ${PRINTOUT}.txt"
+		exit 0;
+	else
+		exit 0;
+	fi
+}
+
+function PRINT_dvdxmlauth_Help {
+
+	echo -e "Usage:\t\$ dvdxmlauthor -f filelist [other options]" ; echo -ne "\n\t" ; 
+	echo -e "Option:\t\tdescription\t\t\t" ; echo -ne "\t" ; 
+	echo -e " -f --filelist\tthe filelist to be used\t\t(default: DVD.filelist)" ; echo -ne "\t" ; 
+	echo -e " -o --output 	the output directory\t\t(default: \$(pwd))" ; echo -ne "\n\t" ; 
+	echo -e "*******DVD STANDARD *******************" ; echo -ne "\t" ; 
+	echo -e " -F --format \tpal | ntsc\t\t\t(default: pal)" ; echo -ne "\t" ; 
+	echo -e " -a --aspect \t4:3 | 16:9\t\t\t(default: 16:9)" ; echo -ne "\t" ; 
+	echo -e "    --aud \taudio language\t\t\t(default: en)" ; echo -ne "\t" ; 
+	echo -e "    --sub \tsubtitle language \t\t(default: fi)" ; echo -ne "\n\t" ; 
+	echo -e "*******DVD MENU OPTIONS****************" ; echo -ne "\t" ; 
+	echo -e "    --menu 	the titleset menu mpeg file" ; echo -ne "\t" ; 
+	echo -e " Or alternatively:" ; echo -ne "\t" ; 
+	echo -e "    --create_menu	automatically create the menu according to the filelist" ; echo -ne "\t" ; 
+	echo -e "    --menubg		menu background prefix\t(default: menu_background(.*))" ; echo -ne "\t" ; 
+#	echo -e "\t\t				.jpg for PAL in resolution 720x576" ; echo -ne "\t" ; 
+#	echo -e "\t\t				.m2v and .mp2 will be used if they exist in project directory" ; echo -ne "\t" ; 
+	echo -e " -O --order 	order for menu buttons\n\t\t\trows | columns\t\t\t(default: rows)" ; echo -ne "\n\t" ; 
+	echo -e "*******OTHER USEFUL OPTIONS************" ; echo -ne "\t" ; 
+	echo -e "    --size 	prints the size of the DVD in filelist and exits"; echo -ne "\t" ; 
+	echo -e " -g --user	generates a filelist, interactive" ; echo -ne "\t" ; 
+	echo -e " -p --print	prints a list of video files in input directories" ; echo
+
+	exit 0;
+}
+
+function eval_gettext () {
+	eval_gettext $"$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
+}
+
+
+function PRINT_dvdxmlauth_Info {
+	echo "DVDXMLAUTHOR "
+	eval_gettext $"This is free software; version "; echo -e "$VERSION\n" 
+}
+
+
+
+translate()
+{
+        out=$(echo "$1" | sed -e 's/\$/$/g')
+        out=$(eval "echo "$out"")
+        echo "$out"
+}
