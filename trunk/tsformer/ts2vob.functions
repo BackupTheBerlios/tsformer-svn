@@ -1,5 +1,6 @@
 #!/bin/bash
-# functions..
+# functions for tsformer
+
 
 function PRINT_ts2vob_Info {
 	eval_gettext $"TS2VOB - transport stream to vob converter, with support for DVB subtitles." ; echo
@@ -8,71 +9,71 @@ function PRINT_ts2vob_Info {
 
 
 function PRINT_ts2vob_Help {
-echo -e $"Usage:\t\$ ts2vob -i input\ file.ts -o \"output filename\""
-echo
-eval_gettext $"If the input\ file.ts is already demuxed, as you might have cut it with the projectx GUI,"
-eval_gettext $"the script looks for the demuxed files in the same directory as the input file."
-eval_gettext $"If -o defines a directory, it will be used to store temporary files."
-echo
-eval_gettext $"The subtitles have to be in .sup format. If they exist in the .ts, they will be merged into the .vob."
-echo
-exit 0;
+	echo -e $"Usage:\t\$ ts2vob -i input\ file.ts -o \"output filename\""
+	echo
+	echo "If the input\ file.ts is already demuxed, as you might have cut it with the projectx GUI,"
+	echo "the script looks for the demuxed files in the same directory as the input file."
+	echo "If -o defines a directory, it will be used to store temporary files."
+	echo
+	echo "The subtitles have to be in .sup format. If they exist in the .ts, they will be merged into the .vob."
+	echo
+	exit 0
 }
 
-function ParseArgs {
-if [ "${#}" -gt 0 ]; then # there are arguments to the command
-  while [ "${#}" -gt 0 ]; do
-    case "$1" in
-        '--help'|'-help'|'--usage'|'-usage'|'-h'|'')
-        PRINT_ts2vob_Help
-        ;;
-        '-i'|'--input')
-	  if [ "$2" ]; then
-  	    INPUT=$2 
-	    shift 2
-	  else
-	    echo $"switch $1: missing input file"
-	    exit 0;
-	  fi
-        ;;
-        '-o'|'--output')
-	  if [ "$2" ]; then
-  	    OUTPUT="$2"
-	    shift 2
-	  else
-	    echo $"switch $1: missing output file"
-	    exit 0;
-	  fi
-        ;;
-     '--mv'|'--move')
-       move=1
-       shift 1
-       ;;
-     '--rm'|'--delete'|'--remove')
-       delete=1
-       shift 1
-       ;;
-     '--verbose'|'-v')
-       isverbose=1
-       shift 1
-       ;;
-     '--version')
-	PRINT_ts2vob_Info
-       exit 0;
-       ;;
-		*)
-			INPUT="$1"
-			echo -n ${tcYELLOW}
-			eval_gettext $ "Argument -i wasn't set, using \$1 as input file"
-			echo ${tSTD}
-    		shift 1;
-		;;
-   esac
-done
-else
-	PRINT_ts2vob_Help
-fi
 
+function ParseArgs {
+	if [ "${#}" -gt 0 ]; then # there are arguments to the command
+	  while [ "${#}" -gt 0 ]; do
+		case "$1" in
+			'--help'|'-help'|'--usage'|'-usage'|'-h'|'')
+			PRINT_ts2vob_Help
+			;;
+			'-i'|'--input')
+		  if [ "$2" ]; then
+			INPUT=$2 
+			shift 2
+		  else
+			echo $"switch $1: missing input file"
+			exit 0;
+		  fi
+			;;
+			'-o'|'--output')
+		  if [ "$2" ]; then
+			OUTPUT="$2"
+			shift 2
+		  else
+			echo $"switch $1: missing output file"
+			exit 0;
+		  fi
+			;;
+		 '--mv'|'--move')
+		   move=1
+		   shift 1
+		   ;;
+		 '--rm'|'--delete'|'--remove')
+		   delete=1
+		   shift 1
+		   ;;
+		 '--verbose'|'-v')
+		   isverbose=1
+		   shift 1
+		   ;;
+		 '--version')
+		PRINT_ts2vob_Info
+		   exit 0;
+		   ;;
+			*)
+				INPUT="$1"
+				echo -n ${tcYELLOW}
+				eval_gettext $ "Argument -i wasn't set, using \$1 as input file"
+				echo ${tSTD}
+				shift 1;
+			;;
+	   esac
+	done
+	else
+		PRINT_ts2vob_Help
+	fi
 
 	SUFFIX="$(echo $INPUT | awk -F. {'print $NF'})"
 	if [ "${#SUFFIX}" -gt 4 ]; then # that's probably basename, user didn't give full filename
@@ -108,16 +109,8 @@ fi
 }
 
 
-
-errmsg () {
-        echo ""
-        echo -e "\e[31;01m $1\e[m\c"    # Red
-        shift; echo " $*"
-}
-
-
+# CheckDeps()
 function CheckDeps {
-
 	if [ ! "$(type -p projectx)" ]; then
 		echo -ne "  [${tBOLD}${tcRED}!!${tSTD}]\t" 
 		eval_gettext $"CRITICAL DEPENDENCY IS MISSING"; echo ": projectx"
@@ -131,23 +124,22 @@ function CheckDeps {
 	elif [ ! "$(type -p dvdauthor)" ]; then
 		errmsg "DEPENDENCY IS MISSING": dvdauthor
 		DEPFAIL=1;
-elif [ ! "$(type -p dirname)" ]; then
-	errmsg "DEPENDENCY IS MISSING": dirname
-elif [ ! "$(type -p pxsup2dast)" ]; then
-	errmsg "DEPENDENCY IS MISSING": pxsup2dast
-	echo "pxsup2dast can be found at http://www.guru-group.fi/~too/sw/m2vmp2cut/pxsup2dast.c"
-elif [ ! "$(type -p iconv)" ]; then
-	errmsg "DEPENDENCY IS MISSING": iconv
-else
-	DEPFAIL=0;
-fi
-
+	elif [ ! "$(type -p dirname)" ]; then
+		errmsg "DEPENDENCY IS MISSING": dirname
+	elif [ ! "$(type -p pxsup2dast)" ]; then
+		errmsg "DEPENDENCY IS MISSING": pxsup2dast
+		echo "pxsup2dast can be found at http://www.guru-group.fi/~too/sw/m2vmp2cut/pxsup2dast.c"
+	elif [ ! "$(type -p iconv)" ]; then
+		errmsg "DEPENDENCY IS MISSING": iconv
+	else
+		DEPFAIL=0;
+	fi
 }
 
 
+# clean()
 function clean {
 	# TODO: other things here too...
-
 	if [ "$move" == 1 ]; then
 		mv "${INPUT}" ${TRASH} && \
 		echo -ne "  [${tcGREEN}!!${tSTD}]\t" && \
@@ -157,60 +149,74 @@ function clean {
 		echo -ne "  [${tcGREEN}OK${tSTD}]\t" && \
 		eval_gettext $"Input file removed" ; echo
 	fi
-
 }
 
 
+# process_Subtitles()
 function process_Subtitles {
+	if [ -e "${DEMUXED}.sup" ]; then # subtitles found
 
-if [ -e "${DEMUXED}.sup" ]; then
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t"
-	eval_gettext $"Subtitles found, processing" ; echo
-	pxsup2dast "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" &> ${LOGFILE}
+		status_ok
+		eval_gettext $"Subtitles found, processing" ; echo
 
-	iconv "${DEMUXED}.d/spumux.xml" -t UTF-8 > "${DEMUXED}.d/spumux-utf8.xml"
+		# use pxsup2dast to convert the .sup subtitles into a format
+		# that can be used by later processes
+		pxsup2dast "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" &> ${LOGFILE}
+		iconv "${DEMUXED}.d/spumux.xml" -t UTF-8 > "${DEMUXED}.d/spumux-utf8.xml"
 
+		local success=0
 
-	# mux the subs into the vob and FINALIZE, CLEAN UP TEMP FILES ############
-#	spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2&>${LOGFILE} && \
-	spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2>> "${LOGFILE}" && \
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t" && \
-	tail "${LOGFILE}" | grep added | grep -Eo '[0-9]+ subtitles [a-zA-Z0-9, ]+skipped' && \
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t" && \
-	eval_gettext $"Output can be found at " && echo "$FINALDIR/$OUTPUT.vob" && \
-	rm "${WORKDIR}/${OUTPUT}.vob" -f && rm "${DEMUXED}.m2v" && rm "${DEMUXED}.mp2" -f && \
-	mv "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" "${DEMUXED}.d/" ${LOGDIR} && \
-	mv "${DEMUXED}_log.txt" "${LOGDIR}"
+		# mux the subs into the vob and finalize, CLEAN UP TEMP FILES ############
+		# spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2&>${LOGFILE} && \
+		spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2>> "${LOGFILE}" && success=1
+		if [ $success -eq 1 ]; then
+			status_ok 
+			tail "${LOGFILE}" | grep added | grep -Eo '[0-9]+ subtitles [a-zA-Z0-9, ]+skipped'
+			status_ok 
+			eval_gettext $"Output can be found at ";  echo "$FINALDIR/$OUTPUT.vob"
 
-else
-	echo -ne "  [${tBOLD}${tcYELLOW}!!${tSTD}]\t" 
-	eval_gettext $"Subtitles not found" ; echo
-	mv "${WORKDIR}/${OUTPUT}.vob" "${FINALDIR}" && \
+			# cleanup
+			rm "${WORKDIR}/${OUTPUT}.vob" -f 
+			rm "${DEMUXED}.m2v" -f
+			rm "${DEMUXED}.mp2" -f 
+			mv "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" "${DEMUXED}.d/" ${LOGDIR}
+			mv "${DEMUXED}_log.txt" "${LOGDIR}"
+		fi
 
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t" && \
-	eval_gettext $"Output can be found at " && echo "$FINALDIR/$OUTPUT.vob" 
-	rm "${DEMUXED}.m2v" -f && rm "${DEMUXED}.mp2" -f && \
-	mv "${DEMUXED}_log.txt" "${LOGDIR}"
-fi
+	else
+
+		status_warn
+		eval_gettext $"Subtitles not found" ; echo
+		if mv "${WORKDIR}/${OUTPUT}.vob" "${FINALDIR}" ; then
+
+			status_ok 
+			eval_gettext $"Output can be found at " ; echo "$FINALDIR/$OUTPUT.vob" 
+			rm "${DEMUXED}.m2v" -f
+			rm "${DEMUXED}.mp2" -f 
+			mv "${DEMUXED}_log.txt" "${LOGDIR}"
+		fi
+	fi
 }
 
 
-
+# multiplex()
 function multiplex {
-
 	cd ${WORKDIR}
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t" 
+	status_ok
 	eval_gettext $"Muxing input to " ; echo "${WORKDIR}/${OUTPUT}.vob"
-	tcmplex-panteltje -i "${DEMUXED}.m2v" -p "${DEMUXED}.mp2" -m d -d $VERBOSITY -o "${WORKDIR}/${OUTPUT}.vob" 2>&1 | grep '^\*'  &> ${LOGFILE}
+	tcmplex-panteltje -i "${DEMUXED}.m2v" -p "${DEMUXED}.mp2" \
+		-m d -d $VERBOSITY -o "${WORKDIR}/${OUTPUT}.vob" 2>&1 | grep '^\*'  &> ${LOGFILE}
 }
 
 
-
+# demux()
+# deduces if the input file has already been demuxed, or demuxes it with projectX.
 function demux {
-	if [[ -e "${BASEDIR}"/"${INPUT_FILENAME}.m2v" ]]; then # the file has been demuxed 
-		DEMUXED="${BASEDIR}"/"${INPUT_FILENAME}";
-		echo -ne "  [${tcGREEN}OK${tSTD}]\t" 
+	if [ -e "${BASEDIR}/${INPUT_FILENAME}.m2v" ]; then # the file has been demuxed 
+		DEMUXED="${BASEDIR}/${INPUT_FILENAME}";
+		status_ok
 		eval_gettext $"Seems you've already demuxed the input to " ; echo "${BASEDIR}"
+
 	elif [[ -e "${WORKDIR}"/"${INPUT_FILENAME}.m2v" ]]; then 
 		DEMUXED="${WORKDIR}"/"${INPUT_FILENAME}";
 		echo -ne "\t[${tcGREEN}OK${tSTD}]\t" 
@@ -218,7 +224,7 @@ function demux {
 
 	else ### DEMUX TO .M2V  .MP2  .SUP ###################
 
-		echo -ne "  [${tcGREEN}OK${tSTD}]\t" 
+		status_ok
 		eval_gettext $"Demuxing input to " ; echo "${WORKDIR}"
 
 		$(java-config -J) -Xms32m -Xmx512m -cp $(java-config -p projectx,jakarta-oro-2.0,commons-net) \
@@ -226,5 +232,23 @@ net.sourceforge.dvb.projectx.common.Start -ini "${LIBDIR}/X.ini" -out "${WORKDIR
 		DEMUXED="${WORKDIR}"/"${INPUT_FILENAME}";
 	fi
 }
+
+
+status_ok() {
+	echo -ne "  [${tcGREEN}OK${tSTD}]\t" 
+}
+
+status_warn() {
+	echo -ne "  [${tBOLD}${tcYELLOW}!!${tSTD}]\t" 
+}
+
+status_err() {
+	echo -ne "  [${tBOLD}${tcRED}!!${tSTD}]\t" 
+}
+
+errmsg () {
+        echo -e "${tcRED}$1${tSTD}"
+}
+
 
 
