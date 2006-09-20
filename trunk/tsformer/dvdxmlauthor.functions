@@ -305,8 +305,6 @@ function totalsize() {
 			echo ${tSTD}
 		fi
 	fi	
-
-
 }
 
 function countSize() {
@@ -360,7 +358,6 @@ function countSize() {
 			echo ${tSTD}
 		fi
 	fi	
-
 }
 
 
@@ -598,13 +595,11 @@ function listen_input {
 
 
 	done
-
 }
 
 
 
 function show_filelist {
-
 	FILES="$(cat $FILELIST | wc -l )"
 	if [ "$FILES" -eq 0 ]; then
 		exit 1;
@@ -631,14 +626,12 @@ function show_filelist {
 	done;
 
 	totalsize print $FILELIST $MEDIA;
-
 }
 
 
 
 
 function list_filelist() {
-
 	# if user gave an argument, then list the files inside that directory
 	[[ "$1" ]] && userFILEDIR="${PROJECTDIR}/${1}"
 	if [ -e "${userFILEDIR}" ]; then
@@ -668,12 +661,10 @@ function list_filelist() {
 	else
 		eval_gettext $"No files found!"
 	fi
-
 }
 
 
 function load_filelist() {
-
 	userFILELIST="${PROJECTDIR}/${1}"
 
 	# load the latest filelist in directory, cat into tmpfile $FILELIST
@@ -688,12 +679,10 @@ function load_filelist() {
 	else
 		eval_gettext $"Filelist does not exist." ; echo
 	fi
-
 }
 
 
 function deduce_menu_status() {
-
 	eval_gettext $"Deducing menu files in " ; echo ${DVD_DIR}
 
 	BG=$(ls ${DVD_DIR} -1 | grep -i 'background')
@@ -761,7 +750,6 @@ function chk_vob {
 }
 
 function save_filelist() {
-
 	PROJECT_NAME="$1"
 
 	# ask the user for a name for the project, if not given as argument
@@ -784,11 +772,9 @@ function save_filelist() {
 
 	eval_gettext $"Filelist saved to "
 	echo ${DVD_DIR}/${PROJECT_NAME}"-$(date +%Y%m%d).filelist"
-
 }
 
 function ask_dvd_params {
-
         ask_menu
 
         echo ; eval_gettext $"Shall we proceed to build the DVD? (y/n)"
@@ -806,7 +792,6 @@ function ask_dvd_params {
 
 
 function ask_menu {
-
 	deduce_menu_status
 
 #	if [ -e "${DVD_DIR}/menu_background.jpg" ]; then
@@ -843,7 +828,6 @@ function ask_menu {
 		eval_gettext $"GRR. Input properly!"
 		echo -en "\t> "; read USER
 	fi
-
 }
 
 function populate() {
@@ -894,7 +878,6 @@ create_menu_background() {
 
 	# done
 	MENU_BG="${DVD_DIR}/${MENU_BGFILE}"
-
 }
 
 
