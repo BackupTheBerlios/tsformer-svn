@@ -111,28 +111,44 @@ function ParseArgs {
 
 # CheckDeps()
 function CheckDeps {
+	DEPFAIL=0;
+	echo "Checking dependencies.."
+
+	# check all needed programs
 	if [ ! "$(type -p projectx)" ]; then
-		echo -ne "  [${tBOLD}${tcRED}!!${tSTD}]\t" 
-		eval_gettext $"CRITICAL DEPENDENCY IS MISSING"; echo ": projectx"
-	return 1;
-	DEPFAIL=1;
-
-	elif [ ! "$(type -p tcmplex-panteltje)" ]; then
-		errmsg "CRITICAL DEPENDENCY IS MISSING": tcmplex-panteltje
+		eval_gettext projectx
+		return 1;
 		DEPFAIL=1;
-
-	elif [ ! "$(type -p dvdauthor)" ]; then
-		errmsg "DEPENDENCY IS MISSING": dvdauthor
-		DEPFAIL=1;
-	elif [ ! "$(type -p dirname)" ]; then
-		errmsg "DEPENDENCY IS MISSING": dirname
-	elif [ ! "$(type -p pxsup2dast)" ]; then
-		errmsg "DEPENDENCY IS MISSING": pxsup2dast
-		echo "pxsup2dast can be found at http://www.guru-group.fi/~too/sw/m2vmp2cut/pxsup2dast.c"
-	elif [ ! "$(type -p iconv)" ]; then
-		errmsg "DEPENDENCY IS MISSING": iconv
 	else
-		DEPFAIL=0;
+		status_ok ; echo projectx
+	fi
+	if [ ! "$(type -p tcmplex-panteltje)" ]; then
+		status_err; echo tcmplex-panteltje
+		DEPFAIL=1;
+	fi
+	if [ ! "$(type -p dvdauthor)" ]; then
+		errmsg dvdauthor
+		DEPFAIL=1;
+	fi
+	if [ ! "$(type -p dirname)" ]; then
+		errmsg dirname
+		DEPFAIL=1;
+	fi
+	if [ ! "$(type -p pxsup2dast)" ]; then
+		errmsg pxsup2dast
+		echo "pxsup2dast can be found at http://www.guru-group.fi/~too/sw/m2vmp2cut/pxsup2dast.c"
+		DEPFAIL=1;
+	fi
+	if [ ! "$(type -p iconv)" ]; then
+		errmsg iconv
+		DEPFAIL=1;
+	fi
+
+	if [ $DEPFAIL -eq 1 ]; then
+		echo -n ${tcRED}
+		eval_gettext $"CRITICAL DEPENDENCIES ARE MISSING, EMERGE ;-)"
+		echo ${tSTD};
+		exit 1
 	fi
 }
 
