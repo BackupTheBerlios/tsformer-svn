@@ -67,14 +67,12 @@ function go_captive() {
 	echo "(2) 16:9"
 	echo -n "Select [2]: "
 	read video_aspect
-	set -x
 	if [ "$video_aspect" = "1" ]; then
 	  video_resolution='320x240' # -video_aspect 4:3
 	else
 	  video_resolution='352x288' # -video_aspect 16:9
 	fi
-	set +x
-	exit 0
+
 	echo -n "Video bitrate? [$video_bitrate]: "
 	read vbr_in
 	if [ "$vbr_in" != "" ]; then
@@ -121,7 +119,7 @@ function parse_arguments() {
 
 				'-o'|'--output')
 					if [ $2 ]; then
-						output_filename="${2}"
+						output_file="${2}"
 						shift 2
 					else
 						missing_arg "$1"
@@ -130,7 +128,7 @@ function parse_arguments() {
 
 				'-i'|'--input')
 					if [ $2 ]; then
-						input_filename="${2}"
+						input_file="${2}"
 						shift 2
 					else
 						missing_arg "$1"
@@ -212,21 +210,31 @@ function parse_arguments() {
 
 				'--cygwin')
 					# user may define the ffmpeg path..
-					if [ $(grep ffmpeg $2) ]; then
-						function ffmpeg() { ${2} }
+					if [ "$(grep ffmpeg <<< $2)" ]; then
+						function ffmpeg() { 
+							${2}
+						}
 						shift 1
 
 					# or it may be pre-defined
 					elif [ "$cygwin_ffmpeg_path" ]; then
-						function ffmpeg() { ${cygwin_ffmpeg_path} }
+						function ffmpeg() { 
+							${cygwin_ffmpeg_path} 
+						}
 
 					# but it not, use plain exe file
 					else
-						function ffmpeg() { ffmpeg.exe }
+						function ffmpeg() { 
+							ffmpeg.exe 
+						}
 					fi
 
 					shift 1
 					;;
+
+					*)
+						input_file="${2}"
+						;;
 
 				esac
 		done
