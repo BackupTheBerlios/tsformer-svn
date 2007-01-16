@@ -1,0 +1,246 @@
+#!/bin/bash
+#######
+# bash.functions - shared functions used by some apps.
+# Copyright (C) 2006 Arvid Norlander
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#######
+
+
+# Got this idea from C
+# Prevents things from messing up
+if [ "$use_bash_functions" != 'use_bash_functions' ]; then
+use_bash_functions='use_bash_functions'
+
+
+# Set the variable in $2 to the terminal cap $1
+# WARNING: Use this function ONLY for string caps!
+# Parameters:
+#   1 string capname
+#   2 string Return variable name (Use Ind. ref.)
+#   3 string Optional: What to use if cap not sup.
+# Exit code:
+#  0=OK
+#  1=Not sup. or unknown cap
+check_cap () {
+	local sup_cap=0
+	tput $1 &>/dev/null
+	[ $? -ne 0 ] && sup_cap=1
+	if [ $sup_cap -eq 0 ]; then
+		eval "$2=\"\$(tput $1)\""
+	else
+		eval "$2=\"\${3:-''}\""
+	fi
+	return $sup_cap
+}
+
+check_cap bold  tBOLD
+check_cap smul  tbUNDERLINE
+check_cap rmul  teUNDERLINE
+check_cap blink tBLINK
+check_cap rev   tREVERSE
+check_cap bel   tBELL
+check_cap sgr0  tSTD
+
+esc=$(echo -ne '\e')
+tab=$(echo -ne '\t')
+
+check_cap 'setaf 0' tcBLACK
+check_cap 'setaf 1' tcRED
+check_cap 'setaf 2' tcGREEN
+check_cap 'setaf 3' tcYELLOW
+check_cap 'setaf 4' tcBLUE
+check_cap 'setaf 5' tcMAGENTA
+check_cap 'setaf 6' tcCYAN
+check_cap 'setaf 7' tcWHITE
+
+if [ "$TERM" == "linux" ]; then
+    tcBLACK="${tcBLACK}${tBOLD}"
+      tcRED="${tcRED}${tBOLD}"
+    tcGREEN="${tcGREEN}${tBOLD}"
+   tcYELLOW="${tcYELLOW}${tBOLD}"
+     tcBLUE="${tcBLUE}${tBOLD}"
+  tcMAGENTA="${tcMAGENTA}${tBOLD}"
+     tcCYAN="${tcCYAN}${tBOLD}"
+    tcWHITE="${tcWHITE}${tBOLD}"
+fi
+
+     header="${tcBLUE}"
+  subheader="${tcBLUE}${tBOLD}"
+   tDepWarn="${tBLINK}${tBOLD}${tcRED}"
+
+# Parmeters:
+#   NONE
+function print_end_start {
+	echo "${tDepWarn}ERROR: print_end_start() is obsolete! Use print_line()!${tSTD}"
+}
+
+
+# Prints a line of 80 "─" if terminal has caps "enacs" and "smacs"
+# otherwise print a line of "-"
+# Example:
+#   Output on "xterm" or "kterm" "─────────"
+#   Output on "linux" console    "---------"
+#
+#TODO: Add more terminaltypes
+#BUG: Don't work in:
+#BUG:   xiterm (Output a lot of small "DC2")
+print_line() {
+	local sup_ext=0
+	tput enacs >/dev/null
+	[ $? -eq 0 ] && tput enacs
+	tput smacs >/dev/null
+	[ $? -ne 0 ] && sup_ext=1
+	[ "$TERM" == 'linux' ] && sup_ext=1
+	if [ $sup_ext == 0 ]; then
+		tput enacs
+		tput smacs
+		yes 'q' | head -n$(tput cols) | tr -d '\012'
+		tput rmacs
+	else
+		yes '-' | head -n$(tput cols) | tr -d '\012'
+		echo
+	fi
+}
+
+# TODO: document
+function print_negative_message() {
+	echo "${tcRED}${1}${tSTD}"
+}
+
+# Parmeters:
+#   NONE
+function print_nothing_found() {
+	print_negative_message $"  Nothing found"
+}
+
+# Parmeters:
+#   1 integer  0=Found
+#              1=Not found
+#   2 string   Prefix if found
+#   3 string   Prefix if not found
+#   4 string   Bold   bit of name of thing found or not found
+#   5 string   Normal bit of name of thing found or not found
+# Example:
+#   print_found_notfound $fmanstatus "A " "No " "man" " page"
+#     If $fmanstatus is 0 the result will be:
+#       "A man page was found!"                     # "found!" will be green
+#     If $fmanstatus is 1 the result will be:
+#       "No man page was found!"                    # "found!" will be red
+#     In both cases "man" will be bold
+function print_found_notfound() {
+	if [ $1 -eq 0 ]; then
+		echo "${tcGREEN}${2}${tSTD}${tBOLD}${4}${tSTD}${tcGREEN}$5 "$"was found!""${tSTD}"
+	elif [ $1 -ne 0 ]; then
+		echo "${tcRED}${3}${tSTD}${tBOLD}${4}${tSTD}${tcRED}$5 "$"was found!""${tSTD}"
+	fi
+}
+
+# Aborts program with message
+# Parameters:
+#   1 string   Message
+#   2 string   Exit status
+# Returns:
+#   Does not return
+function do_abort() {
+	print_negative_message "${tcRED}"$"Error:""${tSTD} ${1}"
+	print_negative_message $"Aborting"
+	exit $2
+}
+
+# Shows message about missing argument(s) and exits with status 1.
+# Parameters:
+#   1 string   Name of option missing an argument(s)
+#   2 integer  Optional: Number of arguments Std=1
+# Returns:
+#   Does not return
+function missing_arg() {
+	if [ $2 ]; then
+		do_abort $"${1} requires ${2} arguments" 1
+	else
+		do_abort $"${1} requires an argument" 1
+	fi
+}
+
+# Shows message about invalid argument(s) and exits with status 1.
+# Parameters:
+#   1 string   Name of option with invalid argument(s)
+#   2 string   Name of the invalid argument
+#   3 integer  Optional: Number of arguments Std=1
+# Returns:
+#   Does not return
+function wrong_arg() {
+	if [ $3 ]; then
+		do_abort $"${2} are invalid arguments to ${1}" 1
+	else
+		do_abort $"${2} is an invalid argument to ${1}" 1
+	fi
+}
+
+# Check if valid argument
+# Parameters:
+#   1 string   The argument
+#   2 string   Space separated list of valid argument(s).
+# Returns:
+#   0 if valid
+#   1 else
+validate_arg () {
+	for my_arg in $2; do
+		[ "$my_arg" = "$1" ] && return 0
+	done
+	return 1
+}
+
+# Check if arguments are integers/floating point values.
+# Parmeters(*):
+#   * *        string/integer to check
+# Returns:
+#   0 if all arguments are integers/floating point values.
+#   1 if one or several of the arguments are strings.
+function AreDecimalNumbers() {
+	for argument in "$@"; do
+		expr "$argument" '+' '1' &>/dev/null
+		[ $? -eq 3 ] && return 1
+	done
+	return 0
+}
+
+# Check if arguments are strings.
+# Parmeters(*):
+#   * *        string/integer to check
+# Returns:
+#   0 if all arguments are strings.
+#   1 if one or several of the arguments are integers/floating point values.
+function AreStrings() {
+	for argument in "$@"; do
+		expr "$argument" '+' '1' &>/dev/null
+		[ $? -eq 0 ] && return 1
+	done
+	return 0
+}
+
+# Shows a identifier and a value.
+# Parmeters:
+#   1 string   Name
+#   2 string   Value
+#   3 integer  Column to print the = at
+function print_name_value_pair {
+	if [ "$3" ]; then
+		echo "${tBOLD}${1}${tSTD}$(tput hpa $(($3 + 1)))= $2"
+	else
+		echo "${tBOLD}${1}${tSTD}$(tput hpa 20)= $2"
+	fi
+}
+
+fi
