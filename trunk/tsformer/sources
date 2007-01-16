@@ -1,0 +1,4 @@
+source lib/version                # version info
+source lib/bash.functions         # colour & line functions
+source lib/cmdline                # command line options, leave as last!
+

@@ -22,8 +22,8 @@ VERSION=20060424
 
  
 ### SOURCE FUNCTIONS and PATHS ##########
+source sources
 source "$(type -p dvdxmlauthor.functions)"
-source "$(type -p bash.functions)"
 source /etc/dvb2vob.conf
 source /usr/bin/gettext.sh
 
