@@ -9,7 +9,6 @@
 . global_variables
 
 main() {
-
 	parse_arguments "${@}"
 	check_parameters
 
@@ -27,26 +26,43 @@ function encode() {
 	# remove redundant log file
 	rm -f flv_pass.log 2>/dev/null
 
-	# -video_aspect -määritys puuttuu
+	if [ $skip_1stpass -eq 0 ]; then
 	nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
-		-s $video_aspect \
-		-vcodec null \
+		-s $video_resolution \
+		-vcodec $video_codec \
+		-aspect $video_aspect \
 		-b $video_bitrate \
 		-ab $audio_bitrate \
 		-ar $audio_samplingrate \
 		-ac $audio_channels \
-		-pass 1 "/dev/null"
+		-f $output_format \
+		-pass 1 -y "/dev/null"
+	fi
+
+	if [ $? -eq 0 ]; then
+		status_ok "Pass 1 successful"
+	else
+		status_err "Pass 1 unsuccessful!"
+	fi
 
 	nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
-		-s $video_aspect \
+		-s $video_resolution \
 		-vcodec $video_codec \
+		-aspect $video_aspect \
 		-b $video_bitrate \
 		-ab $audio_bitrate \
 		-ar $audio_samplingrate \
 		-ac $audio_channels \
-		-pass 2 $output_file
+		-pass 2 -y $output_file
+
+	if [ $? -eq 0 ]; then
+		status_ok "Pass 2 successful"
+	else
+		status_err "Pass 2 unsuccessful!"
+	fi
+
 }
 
 function determine_codec() {
@@ -233,7 +249,8 @@ function parse_arguments() {
 					;;
 
 					*)
-						input_file="${2}"
+						input_file="${1}"
+						shift 1
 						;;
 
 				esac
@@ -244,28 +261,45 @@ function parse_arguments() {
 }
 
 function check_parameters() {
+	# input/output files
 	if [ ! "$input_file" ]; then
 		echo "No input file specified!"
 		exit 1
 	elif [ ! "$output_file" ]; then
 		output_file=$(sed "s/\.[a-zA-Z0-9]\+$/-${output_format}.${output_format}/" <<< $input_file) 
 	fi
+
+	# aspect ratio
+	case $video_resolution in
+		'320x240')
+			video_aspect="4:3"
+			;;
+		'352x288')
+			video_aspect="16:9"
+			;;
+		*)
+			video_aspect="16:9"
+			;;
+	esac
+
+	[ ! "$skip_1stpass" ] && skip_1stpass=0
+
 }
 
 status_ok() {
-	echo -ne "  [${tcGREEN}OK${tSTD}]\t" 
+	echo -e "  [${tcGREEN}OK${tSTD}]\t${@}"
 }
 
 status_warn() {
-	echo -ne "  [${tBOLD}${tcYELLOW}!!${tSTD}]\t" 
+	echo -e "  [${tBOLD}${tcYELLOW}!!${tSTD}]\t${@}" 
 }
 
 status_err() {
-	echo -ne "  [${tBOLD}${tcRED}!!${tSTD}]\t" 
+	echo -e "  [${tBOLD}${tcRED}!!${tSTD}]\t${@}" 
 }
 
 errmsg () {
-        echo -e "${tcRED}$1${tSTD}"
+        echo -e "${tcRED}${@}${tSTD}"
 }
 
 main "${@}"
