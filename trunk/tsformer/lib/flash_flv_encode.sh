@@ -23,9 +23,6 @@ main() {
 }
 
 function encode() {
-	# remove redundant log file
-	rm -f flv_pass.log 2>/dev/null
-
 	local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
 
 	if [ $skip_1stpass -eq 0 ]; then
@@ -67,8 +64,7 @@ function encode() {
 		status_err "Pass 2 unsuccessful!"
 	fi
 
-	rm $passlogfile -f
-
+	rm "${passlogfile}-[0-9].log" -f
 }
 
 function determine_codec() {
@@ -87,13 +83,20 @@ function go_captive() {
 	echo "Aspect ratio?"
 	echo "(1) 4:3"
 	echo "(2) 16:9"
+	echo "(3) HDV 16:9"
 	echo -n "Select [2]: "
-	read video_aspect
-	if [ "$video_aspect" = "1" ]; then
-	  video_resolution='320x240' # -video_aspect 4:3
-	else
-	  video_resolution='352x288' # -video_aspect 16:9
-	fi
+	read video_aspect_select
+	case $video_aspect_select in
+		'1')
+			video_resolution='320x240' # -video_aspect 4:3
+			;;
+		'2')
+			video_resolution='352x288' # -video_aspect 16:9
+			;;
+		'3')
+			video_resolution='512x288' # -video_aspect HDV 16:9
+			;;
+	esac
 
 	echo -n "Video bitrate? [$video_bitrate]: "
 	read vbr_in
@@ -130,7 +133,7 @@ function PRINT_Help() {
 	echo
 }
 
-####### Paudio_samplingrateSE THE COMMAND LINE audio_samplingrateGUMENTS
+####### PARSE THE COMMAND LINE ARGUMENTS
 function parse_arguments() {
 	if [ "$#" -gt 0 ]; then
 		while [ "$#" -gt 0 ]; do
@@ -255,12 +258,12 @@ function parse_arguments() {
 					shift 1
 					;;
 
-					*)
-						input_file="${1}"
-						shift 1
-						;;
+				*)
+					input_file="${1}"
+					shift 1
+					;;
 
-				esac
+			esac
 		done
 	else
 		PRINT_Help
@@ -273,7 +276,7 @@ function check_parameters() {
 		echo "No input file specified!"
 		exit 1
 	elif [ ! "$output_file" ]; then
-		output_file=$(sed "s/\.[a-zA-Z0-9]\+$/-${output_format}.${output_format}/" <<< $input_file) 
+		output_file=$(sed "s/\.[a-zA-Z0-9]\+$/-$(date +%F).${output_format}/" <<< $input_file) 
 	fi
 
 	# aspect ratio
@@ -282,6 +285,9 @@ function check_parameters() {
 			video_aspect="4:3"
 			;;
 		'352x288')
+			video_aspect="16:9"
+			;;
+		'512x288')
 			video_aspect="16:9"
 			;;
 		*)
