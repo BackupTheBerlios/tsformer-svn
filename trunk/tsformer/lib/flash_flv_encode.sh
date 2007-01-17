@@ -64,7 +64,7 @@ function encode() {
 		status_err "Pass 2 unsuccessful!"
 	fi
 
-	rm "${passlogfile}-[0-9].log" -f
+	rm "${passlogfile}-*.log" -f
 }
 
 function determine_codec() {
@@ -273,7 +273,7 @@ function parse_arguments() {
 function check_parameters() {
 	# input/output files
 	if [ ! "$input_file" ]; then
-		echo "No input file specified!"
+		status_err "No input file specified!"
 		exit 1
 	elif [ ! "$output_file" ]; then
 		output_file=$(sed "s/\.[a-zA-Z0-9]\+$/-$(date +%F).${output_format}/" <<< $input_file) 
@@ -309,10 +309,6 @@ status_warn() {
 
 status_err() {
 	echo -e "  [${tBOLD}${tcRED}!!${tSTD}]\t${@}" 
-}
-
-errmsg () {
-        echo -e "${tcRED}${@}${tSTD}"
 }
 
 main "${@}"
