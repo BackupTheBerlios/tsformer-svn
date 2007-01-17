@@ -26,6 +26,8 @@ function encode() {
 	# remove redundant log file
 	rm -f flv_pass.log 2>/dev/null
 
+	local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+
 	if [ $skip_1stpass -eq 0 ]; then
 	nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
@@ -37,6 +39,7 @@ function encode() {
 		-ar $audio_samplingrate \
 		-ac $audio_channels \
 		-f $output_format \
+		-passlogfile $passlogfile \
 		-pass 1 -y "/dev/null"
 	fi
 
@@ -55,6 +58,7 @@ function encode() {
 		-ab $audio_bitrate \
 		-ar $audio_samplingrate \
 		-ac $audio_channels \
+		-passlogfile $passlogfile \
 		-pass 2 -y $output_file
 
 	if [ $? -eq 0 ]; then
@@ -62,6 +66,8 @@ function encode() {
 	else
 		status_err "Pass 2 unsuccessful!"
 	fi
+
+	rm $passlogfile -f
 
 }
 
@@ -118,6 +124,7 @@ function PRINT_Help() {
 	echo "  -res        video resolution [default: ?x?]"
 	echo " miscellaneous"
 	echo "  --verbose"
+	echo "  --niceness  set nice value"
 	echo "  --captive   use captive interface; ask parameters"
 	echo "  --cygwin [path\\to\\ffmpeg.exe]   use ffmpeg.exe"
 	echo
