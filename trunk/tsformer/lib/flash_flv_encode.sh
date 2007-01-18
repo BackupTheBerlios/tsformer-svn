@@ -23,10 +23,12 @@ main() {
 }
 
 function encode() {
-	local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+	# create tmp file
+	[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
 
+	# do 1st pass..
 	if [ $skip_1stpass -eq 0 ]; then
-	nice -n $encoder_niceness \
+	#nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
 		-s $video_resolution \
 		-vcodec $video_codec \
@@ -37,16 +39,15 @@ function encode() {
 		-ac $audio_channels \
 		-f $output_format \
 		-passlogfile $passlogfile \
-		-pass 1 -y "/dev/null"
+		-pass 1 -y "$nullfile"
 	fi
-
 	if [ $? -eq 0 ]; then
 		status_ok "Pass 1 successful"
 	else
 		status_err "Pass 1 unsuccessful!"
 	fi
 
-	nice -n $encoder_niceness \
+	#nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
 		-s $video_resolution \
 		-vcodec $video_codec \
@@ -64,7 +65,7 @@ function encode() {
 		status_err "Pass 2 unsuccessful!"
 	fi
 
-	rm "${passlogfile}-*.log" -f
+	rm ${passlogfile}* "${nullfile}" -f
 }
 
 function determine_codec() {
@@ -234,26 +235,33 @@ function parse_arguments() {
 					shift 1
 					;;
 
+				'--passlogfile')
+					shift 1
+					;;
+
 				'--cygwin')
 					# user may define the ffmpeg path..
 					if [ "$(grep ffmpeg <<< $2)" ]; then
 						function ffmpeg() { 
-							${2}
+							${2} "${@}"
 						}
 						shift 1
 
 					# or it may be pre-defined
 					elif [ "$cygwin_ffmpeg_path" ]; then
-						function ffmpeg() { 
-							${cygwin_ffmpeg_path} 
+						function ffmpeg() {
+							"${cygwin_ffmpeg_path}"  "${@}"
 						}
 
 					# but it not, use plain exe file
 					else
 						function ffmpeg() { 
-							ffmpeg.exe 
+							./ffmpeg.exe "${@}"
 						}
 					fi
+
+					nullfile="tmpfile-CYGWIN"
+					passlogfile="passlog-$(date +%F)"
 
 					shift 1
 					;;
@@ -273,7 +281,7 @@ function parse_arguments() {
 function check_parameters() {
 	# input/output files
 	if [ ! "$input_file" ]; then
-		status_err "No input file specified!"
+		echo "No input file specified!"
 		exit 1
 	elif [ ! "$output_file" ]; then
 		output_file=$(sed "s/\.[a-zA-Z0-9]\+$/-$(date +%F).${output_format}/" <<< $input_file) 
@@ -296,7 +304,7 @@ function check_parameters() {
 	esac
 
 	[ ! "$skip_1stpass" ] && skip_1stpass=0
-
+	[ ! "$nullfile" ] &&  nullfile="/dev/null"
 }
 
 status_ok() {
@@ -309,6 +317,10 @@ status_warn() {
 
 status_err() {
 	echo -e "  [${tBOLD}${tcRED}!!${tSTD}]\t${@}" 
+}
+
+errmsg () {
+        echo -e "${tcRED}${@}${tSTD}"
 }
 
 main "${@}"
