@@ -6,6 +6,7 @@
 . global_variables
 
 use_cygwin=0
+twopass_encoding=1 # on by default
 
 main() {
 	parse_arguments "${@}"
@@ -13,6 +14,7 @@ main() {
 	echo "Processing input file $input_file..."
 	echo
 
+	# use captive interface
 	[ $iscaptive -eq 1 ] && go_captive
 
 	determine_codec
@@ -22,7 +24,12 @@ main() {
 
 function encode() {
 	# create tmp file
-	[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+	if [ $twopass_encoding -eq 1 ]; then
+		[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+	fi
+
+	# reminder: for cygwin to work properly (bash 3.2.9), $nullfile and
+	# $passlogfile are defined earlier. 
 
 	# do 1st pass..
 	if [ $skip_1stpass -eq 0 ]; then
@@ -45,6 +52,7 @@ function encode() {
 		status_err "Pass 1 unsuccessful!"
 	fi
 
+	# 2nd pass
 	#nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
 		-s $video_resolution \
@@ -270,33 +278,33 @@ function parse_arguments() {
 }
 
 function init_cygwin_env() {
-					# user may define the ffmpeg path..
-					if [ "$(grep ffmpeg <<< $2)" ]; then
-						function ffmpeg() { 
-							${2} "${@}"
-						}
-						shift 1
+	# user may define the ffmpeg path..
+	if [ "$(grep ffmpeg <<< $2)" ]; then
+		function ffmpeg() { 
+			${2} "${@}"
+		}
+		shift 1
 
-					# or it may be pre-defined
-					elif [ "$cygwin_ffmpeg_path" ]; then
-						function ffmpeg() {
-							"${cygwin_ffmpeg_path}"  "${@}"
-						}
+	# or it may be pre-defined
+	elif [ "$cygwin_ffmpeg_path" ]; then
+		function ffmpeg() {
+			"${cygwin_ffmpeg_path}"  "${@}"
+		}
 
-					# but it not, use plain exe file
-					else
-						function ffmpeg() {
-							./ffmpeg.exe "${@}"
-						}
-					fi
+	# but it not, use plain exe file
+	else
+		function ffmpeg() {
+			./ffmpeg.exe "${@}"
+		}
+	fi
 
-					tmp_path="/tmp/"
+	tmp_path="/tmp/"
 
-					nullfile="tmpfile-CYGWIN"
-#					nullfile="$(cygpath -au "${tmp_path}tmpfile-CYGWIN")"
+	nullfile="tmpfile-CYGWIN"
+#	nullfile="$(cygpath -au "${tmp_path}tmpfile-CYGWIN")"
 
-					passlogfile="passlog-$(date +%F)"
-#					passlogfile="$(cygpath -au "${tmp_path}passlog-$(date +%F)")"
+	passlogfile="passlog-$(date +%F)"
+#	passlogfile="$(cygpath -au "${tmp_path}passlog-$(date +%F)")"
 
 
 	if [ $(grep -E '[A-Z0-9]{1}:' <<< ${input_file}) ]; then
@@ -308,9 +316,6 @@ function init_cygwin_env() {
 		# user has given the input in the form of standard Windows notation
 		output_file="$(cygpath -am "${output_file}")"
 	fi
-
-
-
 }
 
 
