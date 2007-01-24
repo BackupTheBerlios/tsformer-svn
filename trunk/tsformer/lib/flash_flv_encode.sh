@@ -2,22 +2,17 @@
 #
 # Flash FLVencode.sh
 
-#input_file="boitekong.avi"     # source file
-#output_file=MyVideo.flv          # target file
-
 . bash.functions
 . global_variables
 
-twopass_encoding=1 # on by default
+use_cygwin=0
 
 main() {
 	parse_arguments "${@}"
-	check_parameters
 
 	echo "Processing input file $input_file..."
 	echo
 
-	# use captive interface
 	[ $iscaptive -eq 1 ] && go_captive
 
 	determine_codec
@@ -27,12 +22,7 @@ main() {
 
 function encode() {
 	# create tmp file
-	if [ $twopass_encoding -eq 1 ]; then
-		[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
-	fi
-
-	# reminder: for cygwin to work properly (bash 3.2.9), $nullfile and
-	# $passlogfile are defined earlier. 
+	[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
 
 	# do 1st pass..
 	if [ $skip_1stpass -eq 0 ]; then
@@ -55,7 +45,6 @@ function encode() {
 		status_err "Pass 1 unsuccessful!"
 	fi
 
-	# 2nd pass
 	#nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
 		-s $video_resolution \
@@ -155,7 +144,18 @@ function parse_arguments() {
 
 				'-o'|'--output')
 					if [ $2 ]; then
-						output_file="${2}"
+						if [ "$(grep -E '\/|\\$' <<< ${2})" ]; then
+							# the final letter is '/',
+							# = the user has given a path
+							if [ "$input_file" ]; then
+								output_file="${2}$(basename ${input_file})"
+							else
+								output_file="${2}$(date +%F)"
+							fi
+
+						else
+							output_file="${2}"
+						fi
 						shift 2
 					else
 						missing_arg "$1"
@@ -249,6 +249,27 @@ function parse_arguments() {
 					;;
 
 				'--cygwin')
+					use_cygwin=1
+					shift 1
+					;;
+
+				*)
+					input_file="${1}"
+					shift 1
+					;;
+
+			esac
+		done
+
+		[ $use_cygwin -eq 1 ] && init_cygwin_env
+		check_parameters
+
+	else
+		PRINT_Help
+	fi
+}
+
+function init_cygwin_env() {
 					# user may define the ffmpeg path..
 					if [ "$(grep ffmpeg <<< $2)" ]; then
 						function ffmpeg() { 
@@ -264,28 +285,34 @@ function parse_arguments() {
 
 					# but it not, use plain exe file
 					else
-						function ffmpeg() { 
+						function ffmpeg() {
 							./ffmpeg.exe "${@}"
 						}
 					fi
 
+					tmp_path="/tmp/"
+
 					nullfile="tmpfile-CYGWIN"
+#					nullfile="$(cygpath -au "${tmp_path}tmpfile-CYGWIN")"
+
 					passlogfile="passlog-$(date +%F)"
+#					passlogfile="$(cygpath -au "${tmp_path}passlog-$(date +%F)")"
 
-					shift 1
-					;;
 
-				*)
-					input_file="${1}"
-					shift 1
-					;;
-
-			esac
-		done
-	else
-		PRINT_Help
+	if [ $(grep -E '[A-Z0-9]{1}:' <<< ${input_file}) ]; then
+		# user has given the input in the form of standard Windows notation
+		input_file="$(cygpath -aw "${input_file}")"
 	fi
+
+	if [ $(grep -E '[A-Z0-9]{1}:' <<< ${output_file}) ]; then
+		# user has given the input in the form of standard Windows notation
+		output_file="$(cygpath -am "${output_file}")"
+	fi
+
+
+
 }
+
 
 function check_parameters() {
 	# input/output files
