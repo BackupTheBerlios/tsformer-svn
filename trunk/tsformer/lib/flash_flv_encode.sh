@@ -8,6 +8,8 @@
 . bash.functions
 . global_variables
 
+twopass_encoding=1 # on by default
+
 main() {
 	parse_arguments "${@}"
 	check_parameters
@@ -15,6 +17,7 @@ main() {
 	echo "Processing input file $input_file..."
 	echo
 
+	# use captive interface
 	[ $iscaptive -eq 1 ] && go_captive
 
 	determine_codec
@@ -24,7 +27,12 @@ main() {
 
 function encode() {
 	# create tmp file
-	[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+	if [ $twopass_encoding -eq 1 ]; then
+		[ ! "$passlogfile" ] && local passlogfile="$(mktemp /tmp/flv.XXXXXX)"
+	fi
+
+	# reminder: for cygwin to work properly (bash 3.2.9), $nullfile and
+	# $passlogfile are defined earlier. 
 
 	# do 1st pass..
 	if [ $skip_1stpass -eq 0 ]; then
@@ -47,6 +55,7 @@ function encode() {
 		status_err "Pass 1 unsuccessful!"
 	fi
 
+	# 2nd pass
 	#nice -n $encoder_niceness \
 	ffmpeg -i "$input_file" \
 		-s $video_resolution \
