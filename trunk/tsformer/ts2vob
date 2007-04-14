@@ -8,7 +8,7 @@
 #			or memo ruxpin@freenode
 
 
-VERSION=20060817
+VERSION=20070310
 
 
 ### TODO ##############
@@ -24,8 +24,8 @@ VERSION=20060817
 
 
 ### SOURCE FUNCTIONS and PATHS ##########
-source "$(type -p ts2vob.functions)"
-source "$(type -p bash.functions)"
+source "ts2vob.functions"
+source "lib/bash.functions"
 source /etc/dvb2vob.conf
 source /usr/bin/gettext.sh
 
