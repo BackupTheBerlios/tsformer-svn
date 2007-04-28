@@ -24,7 +24,7 @@ my $VERSION = "0.10";
 
 use strict;
 use Getopt::Long;
-use Video::DVB2VOB;
+use Mediator::DVB2VOB;
 
 my ($opt_help, $verbose);
 
@@ -66,4 +66,13 @@ sub info {
 # MAIN
 #############################################################
 {
+    # print info
+    info();
+
+    # create an object to manipulate the file
+    my $converter = new Mediator::DVB2VOB() or die "Cannot create an instance";
+    # first check if our dependencies are satisfied..
+    $converter->check_dependencies or die "CRITICAL DEPENDENCIES ARE MISSING";
+
+
 }
