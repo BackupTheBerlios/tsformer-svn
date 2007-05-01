@@ -81,6 +81,9 @@ sub info {
     # first check if our dependencies are satisfied, error handling done there
     $converter->check_dependencies;
 
+    # run any preprocessing to the input file
+    $converter->preprocess( $inF ) or die;
+
     # unless is_demuxed($inF) demux($inF, $tmpd) or die "demuxing";
     # 
 # 	if [ -e "${DEMUXED}.sup" ]; then # subtitles found
