@@ -1,0 +1,14 @@
+# global default variables
+input_file=""
+audio_bitrate=128
+audio_samplingrate=44100
+audio_channels=2
+video_bitrate=500000
+output_format="flv"
+encoder_niceness=19
+video_resolution='352x288'
+
+cygwin_ffmpeg_path="/cygdrive/c/Program files/Avid/Avid liquid 7/Plugins/export/ffmpeg.exe"
+isverbose=0
+iscaptive=0
+

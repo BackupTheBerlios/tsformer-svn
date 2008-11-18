@@ -1,0 +1,40 @@
+
+YLE DVB subtitle symbol database for son2srt
+--------------------------------------------
+Niko Mikkilä <mikkila at cs helsinki fi>
+
+The database consists of db.lst, .pbm symbol bitmaps and a correction filter
+in correct.py. db.lst connects bitmaps to their symbolic representation and
+the filter is used in postprocessing to correct OCR errors.
+
+The bitmap files are pieces of data captured from FTA YLE DVB broadcasts.
+They are provided here for convenience.
+
+
+Remaining problems
+------------------
+
+Annoying:
+
+- "f" is recognized as "l" in italic fonts. Building generic filter rules for
+  this is pretty hard, so gocr should handle it better. These are also hard
+  to find manually without reading all the lines through.
+
+- Subtitle corruption. Usually horizontal lines in the bitmaps which really
+  confuse gocr. Search for "--" in the resulting srt file.
+
+Mostly harmless:
+
+- Dots after "ä" and "ö" letters. These can be mostly catched with filters, but
+  some tough cases remain. To find the offenders manually, search for "ä.",
+  "ö." and "b.". Gocr CVS fixes this (although causes more serious problems
+  elsewhere).
+
+- There are still some symbols missing from the database. When encountered,
+  a new symbol can be added by cutting it out of the bmp file, inverting the
+  colors, changing color space to black and white and converting the result to
+  .pbm format with netpbm tools. Finally, a corresponding entry needs to be put
+  to the db.lst file. 
+  Alternatively you can try giving the -a parameter to son2srt, but then you'll
+  probably need to answer a lot of redundant symbol queries too.
+
