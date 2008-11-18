@@ -3,7 +3,7 @@
 
 
 function PRINT_ts2vob_Info {
-	eval_gettext $"TS2VOB - transport stream to vob converter, with support for DVB subtitles." ; echo
+	eval_gettext $"TS2VOB - transport stream to vob converter, with support for DVB subtitles."; echo
 	eval_gettext $"This is free software; version " echo $VERSION ; echo 
 }
 
