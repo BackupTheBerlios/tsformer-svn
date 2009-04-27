@@ -9,6 +9,12 @@ from subprocess import Popen,PIPE
 
 VERSION = '2.0.0_rc'
 
+# verbosity levels:
+#  0 plain status messages
+#  1 some debugging info
+#  2 all debugging info
+verbosity = 0
+
 
 def info():
   print "TS2VOB - transport stream to vob converter, with support for DVB subtitles."
@@ -139,9 +145,17 @@ class TsHandler:
       self.demux_basename+'.mp2',
       self.demux_basename+'.vob',
       self.mode,
-      1 # verbosity
-    )
+      verbosity
+    ) # writes everything to STDERR
+    if verbosity < 2:
+      cmd += ' 2>/dev/null'
     os.system(cmd)
+    #p = Popen([cmd],shell=True,stderr=PIPE)
+    #while True:
+      #e = p.stderr.readline()
+      #if verbosity > 1:
+        #sys.stdout.write(e)
+      #if p.poll() != None: break
     return None
 
 
@@ -170,6 +184,8 @@ class TsHandler:
       self.demux_basename+'.sup',
       self.demux_basename+'.sup.IFO'
     )
+    if verbosity < 2:
+      cmd += ' >/dev/null'
     os.system(cmd)
 
     spumux_xml = self.demux_basename+'.d/spumux.xml'
@@ -189,24 +205,23 @@ class TsHandler:
       self.demux_basename+'.vob',
       self.output_file
     )
-    p = Popen([cmd],shell=True,stdout=PIPE,stderr=PIPE)
-    err = ''
+    p = Popen([cmd],shell=True,stderr=PIPE)
     status = ''
     while True:
-      o = p.stdout.readline()
       e = p.stderr.readline()
-      if re.search(r'^ERR', e):
-        err += e
-      if o == '' and p.poll() != None:
-        status = e
-        break
 
-    print status
+      if verbosity > 1:
+        sys.stdout.write(e)
 
-          #os.system(cmd)
-            #status_ok
-            #tail "${LOGFILE}" | grep added | grep -Eo '[0-9]+ subtitles [a-zA-Z0-9, ]+skipped'
-            #status_ok
+      elif (verbosity==1 and re.search(r'^ERR', e)):
+        sys.stdout.write(e)
+
+      if re.search(r'subtitles added', e):
+        status = e.rstrip('\n')
+
+      if p.poll() != None: break
+
+    self.info_msg(status)
     return None
 
 
@@ -241,7 +256,7 @@ def check_dependencies():
 def main(argv):
   info()
   try:
-    opts, args = getopt.getopt(argv, "hi:o:v",["help","input=","output=","verbose"])
+    opts, args = getopt.getopt(argv, "hi:o:v:",["help","input=","output=","verbosity="])
   except getopt.GetoptError:
     usage()
     sys.exit(2)
@@ -260,8 +275,9 @@ def main(argv):
     elif opt in ("-o", "--output"):
       _output = arg
 
-    elif opt in ("-v", "--verbose"):
-      _verbose = 1
+    elif opt in ("-v", "--verbosity"):
+      global verbosity
+      verbosity = int(arg)
 
   source = "".join(args) # rest of the arguments
   if _input is None:
