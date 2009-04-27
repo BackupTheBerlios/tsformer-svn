@@ -5,6 +5,7 @@ import os
 import sys
 import getopt
 import re
+from subprocess import Popen,PIPE
 
 VERSION = '2.0.0_rc'
 
@@ -136,7 +137,7 @@ class TsHandler:
     cmd = 'tcmplex-panteltje -i "%s" -p "%s" -o "%s" -m %s -d %i' % (
       self.demux_basename+'.m2v',
       self.demux_basename+'.mp2',
-      self.output_file,
+      self.demux_basename+'.vob',
       self.mode,
       1 # verbosity
     )
@@ -145,12 +146,78 @@ class TsHandler:
 
 
   def process_subtitles(self):
-    """ Process subtitles, if they exist """
-    None
+    """ Process subtitles, if they exist.
+
+    Uses pxsup2dast to convert the .sup subtitles into a format
+    that can be used by later processes.
+
+    """
+    if not os.path.exists(self.demux_basename+'.sup'):
+      self.info_msg('Subtitles not found')
+      if not self.demux_basename+'.vob'==self.output_file:
+        cmd = 'mv "%s" "%s"' % (
+          self.demux_basename+'.vob',
+          self.output_file
+        )
+        self.info_msg('Copying file to destination')
+        os.system(cmd)
+      return None
+
+    self.info_msg('Subtitles found, processing')
+
+    #pxsup2dast "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" &> ${LOGFILE}
+    cmd = 'pxsup2dast "%s" "%s"' % (
+      self.demux_basename+'.sup',
+      self.demux_basename+'.sup.IFO'
+    )
+    os.system(cmd)
+
+    spumux_xml = self.demux_basename+'.d/spumux.xml'
+    spumux_xml_utf8 = self.demux_basename+'.d/spumux-utf8.xml'
+
+    #iconv "${DEMUXED}.d/spumux.xml" -t UTF-8 > "${DEMUXED}.d/spumux-utf8.xml"
+    cmd = 'iconv "%s" -t UTF-8 > "%s"' % (
+      spumux_xml,
+      spumux_xml_utf8
+    )
+    os.system(cmd)
+
+    # mux the subs into the vob with spumux
+    #spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2>> "${LOGFILE}"
+    cmd = 'spumux -v 1 "%s" < "%s" > "%s"' % (
+      spumux_xml_utf8,
+      self.demux_basename+'.vob',
+      self.output_file
+    )
+    p = Popen([cmd],shell=True,stdout=PIPE,stderr=PIPE)
+    err = ''
+    status = ''
+    while True:
+      o = p.stdout.readline()
+      e = p.stderr.readline()
+      if re.search(r'^ERR', e):
+        err += e
+      if o == '' and p.poll() != None:
+        status = e
+        break
+
+    print status
+
+          #os.system(cmd)
+            #status_ok
+            #tail "${LOGFILE}" | grep added | grep -Eo '[0-9]+ subtitles [a-zA-Z0-9, ]+skipped'
+            #status_ok
+    return None
+
 
   def clean(self):
     """ Cleanup """
-    None
+    #rm "${WORKDIR}/${OUTPUT}.vob" -f
+    #rm "${DEMUXED}.m2v" -f
+    #rm "${DEMUXED}.mp2" -f
+    #mv "${DEMUXED}.sup" "${DEMUXED}.sup.IFO" "${DEMUXED}.d/" ${LOGDIR}
+    #mv "${DEMUXED}_log.txt" "${LOGDIR}"
+    return None
 
   def go(self):
     """ starts the process """
@@ -163,6 +230,8 @@ class TsHandler:
     self.process_subtitles()
 
     self.clean()
+
+    self.info_msg('Output can be found at %s' % self.output_file)
 
 
 def check_dependencies():
