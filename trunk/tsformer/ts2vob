@@ -28,19 +28,19 @@
 # THE SOFTWARE.
 
 
-VERSION=20070310
+VERSION="1.0.0" # released 20070310
 
 
 ### TODO ##############
-# usage: -i tai ei mit‰‰n: toiminta sama
+# usage: -i tai ei mit√§√§n: toiminta sama
 # -o voi ottaa hakemiston, tiedostonimen tai molemmat
 # if WORKDIR etc is not defined by cli or here, default to $BASEDIR
 # if -o defines directory, use that as WORKDIR
 # -v | --verbose 	= verbose
 # --subdelay 		= delay (in ms) for subtitles (pass to pxsup2dast)
 # tcmplex: *** -alkuiset > stdout ; INFO > stderr
-# jos inputin p‰‰tett‰ ei m‰‰ritell‰, pit‰isi silti siirt‰‰/poistaa!
-# dvdxmlauth: vain pelkk‰ create menus mahdollisuus!
+# jos inputin p√§√§tett√§ ei m√§√§ritell√§, pit√§isi silti siirt√§√§/poistaa!
+# dvdxmlauth: vain pelkk√§ create menus mahdollisuus!
 
 
 ### SOURCE FUNCTIONS and PATHS ##########
