@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
 import os
+import sys
 import getopt
 import re
 
@@ -30,6 +30,16 @@ class TsHandler:
   def __init__(self,input_file):
     self.input_file = input_file
 
+    """ output mode (for tcmplex-panteltje)
+                    1 = mpeg1 vbr, buffer 46kb (*** default XVCD).
+                    b = mpeg1 vbr, buffer 224kb (experimental).
+                    2 = mpeg2 vbr.
+                    d = DVD.
+                    s = SVCD.
+                    v = VCD.
+    """
+    self.mode = 'd'
+
     # the location of X.ini
     self.Xini = '/'.join([os.getcwd(),'X.ini'])
 
@@ -37,6 +47,7 @@ class TsHandler:
     m = re.search(r'\.([^.]*)$', input_file)
     if m is None:
       self.suffix = None
+      self.warn_msg('File suffix could not be detected')
     else:
       self.suffix = m.group(1)
 
@@ -54,10 +65,19 @@ class TsHandler:
     # working directory
     self.workdir = os.path.dirname(self.input_file)
 
-    ## output file
-    #self.output_file = '/'.join([
-      #os.path.dirname(self.input_file),
-      #self.filename])
+    # output directory = input file's
+    self.output_dir = os.path.dirname(self.input_file)
+
+    # temporary demux basename
+    # -- follows projectX char replacements
+    self.demux_basename = '/'.join([
+      self.workdir,
+      re.sub(r'\:', '_', self.filename)])
+
+    # final output file
+    self.output_file = '/'.join([
+      self.output_dir,
+      self.filename+'.vob'])
 
     self.trash = None
     self.logfile = None
@@ -65,6 +85,9 @@ class TsHandler:
 
   def info_msg(self,msg):
     print '  [OK] %s' % (msg)
+
+  def warn_msg(self,msg):
+    print '  [WW] %s' % (msg)
 
   def err_msg(self,msg):
     print '  [!!] %s' % (msg)
@@ -75,7 +98,7 @@ class TsHandler:
         deduces if the input file has already been demuxed,
         or demuxes it with projectX
     """
-    if os.path.exists('/'.join([self.workdir,self.filename+'.m2v'])):
+    if os.path.exists(self.demux_basename+'.m2v'):
       self.info_msg('Input has already been demuxed')
       return None
 
@@ -96,9 +119,30 @@ class TsHandler:
     self.info_msg('Demuxed')
     return None
 
+
   def multiplex(self):
-    """ Multiplex to VOB """
-    None
+    """ Multiplex to VOB.
+
+    Uses tcmplex-panteltje, which is a bit esoteric program, but when
+    the initial bash version of this program was created in early 2006,
+    this produced the best quality output (was in sync) of all programs
+    I tried.
+
+    """
+    self.info_msg('Muxing input to "%s"' % self.output_file)
+
+    #tcmplex-panteltje -i "${DEMUXED}.m2v" -p "${DEMUXED}.mp2" \
+    #-m d -d $VERBOSITY -o "${WORKDIR}/${OUTPUT}.vob" 2>&1 | grep '^\*'  &> ${LOGFILE}
+    cmd = 'tcmplex-panteltje -i "%s" -p "%s" -o "%s" -m %s -d %i' % (
+      self.demux_basename+'.m2v',
+      self.demux_basename+'.mp2',
+      self.output_file,
+      self.mode,
+      1 # verbosity
+    )
+    os.system(cmd)
+    return None
+
 
   def process_subtitles(self):
     """ Process subtitles, if they exist """
