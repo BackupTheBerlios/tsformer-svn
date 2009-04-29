@@ -44,7 +44,7 @@ VERSION="1.0.0" # released 20070310
 
 
 ### SOURCE FUNCTIONS and PATHS ##########
-source "ts2vob.functions"
+source "lib/ts2vob.functions"
 source "lib/bash.functions"
 source /etc/dvb2vob.conf
 source /usr/bin/gettext.sh
