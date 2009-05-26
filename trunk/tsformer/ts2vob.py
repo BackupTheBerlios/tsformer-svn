@@ -76,10 +76,15 @@ class TsHandler:
     self.output_dir = os.path.dirname(self.input_file)
 
     # temporary demux basename
-    # -- follows projectX char replacements
+    # -- acknowledge projectX ':' -> '_' char replacement since version ... ?
+    # version 0.90.4.00 does not change characters
+    #self.demux_basename = '/'.join([
+      #self.workdir,
+      #re.sub(r'\:', '_', self.filename)])
+
     self.demux_basename = '/'.join([
       self.workdir,
-      re.sub(r'\:', '_', self.filename)])
+      self.filename])
 
     # final output file
     self.output_file = '/'.join([
@@ -166,11 +171,16 @@ class TsHandler:
     that can be used by later processes.
 
     """
-    if not os.path.exists(self.demux_basename+'.sup'):
-      self.info_msg('Subtitles not found')
-      if not self.demux_basename+'.vob'==self.output_file:
+    subtitles = self.demux_basename+'.sup'
+    if not os.path.exists(subtitles):
+      self.info_msg('Subtitles ("%s") not found' % subtitles)
+      tmpfile = self.demux_basename+'.vob'
+
+      # finalize
+      if not tmpfile==self.output_file:
+        # move
         cmd = 'mv "%s" "%s"' % (
-          self.demux_basename+'.vob',
+          tmpfile,
           self.output_file
         )
         self.info_msg('Copying file to destination')
@@ -200,11 +210,15 @@ class TsHandler:
 
     # mux the subs into the vob with spumux
     #spumux -v $VERBOSITY "${DEMUXED}.d/spumux-utf8.xml" < "${WORKDIR}/${OUTPUT}.vob" > "${FINALDIR}"/"${OUTPUT}.vob" 2>> "${LOGFILE}"
+    tmpfile = '/tmp/ts2vob.tmp'
     cmd = 'spumux -v 1 "%s" < "%s" > "%s"' % (
       spumux_xml_utf8,
       self.demux_basename+'.vob',
-      self.output_file
+      tmpfile
     )
+    if verbosity > 1:
+      self.info_msg('Running spumux: %s' % cmd)
+
     p = Popen([cmd],shell=True,stderr=PIPE)
     status = ''
     while True:
@@ -222,6 +236,15 @@ class TsHandler:
       if p.poll() != None: break
 
     self.info_msg(status)
+
+    # move
+    cmd = 'mv "%s" "%s"' % (
+      tmpfile,
+      self.output_file
+    )
+    self.info_msg('Moving file to destination')
+    os.system(cmd)
+
     return None
 
 
